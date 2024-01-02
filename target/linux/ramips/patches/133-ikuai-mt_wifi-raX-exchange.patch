@@ -1,0 +1,21 @@
+--- linux-3.10.14.orig/drivers/net/wireless/mt_wifi/embedded/Kconfig	2024-01-02 15:12:41.678561078 +0800
++++ linux-3.10.14/drivers/net/wireless/mt_wifi/embedded/Kconfig	2024-01-02 15:14:12.511949623 +0800
+@@ -139,7 +139,6 @@
+ config DBDC_MODE
+ 	bool "dbdc mode support"
+ 	select MULTI_PROFILE_SUPPORT
+-	select DEFAULT_5G_PROFILE
+ 	default y
+ 
+ config MULTI_PROFILE_SUPPORT
+@@ -149,8 +148,8 @@
+ 
+ config DEFAULT_5G_PROFILE
+     bool "5G default profile for DBDC"
+-	depends on DBDC_MODE
+-    default y
++	depends on MULTI_PROFILE_SUPPORT
++	default n
+ 
+ config WSC_INCLUDED
+ 	bool "WSC (WiFi Simple Config)"

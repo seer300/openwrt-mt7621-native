@@ -1,0 +1,24 @@
+--- linux-3.10.14.orig/drivers/mtd/ralink/ralink_bbu_spi.c	2024-01-02 15:11:18.645251067 +0800
++++ linux-3.10.14/drivers/mtd/ralink/ralink_bbu_spi.c	2024-01-02 15:06:34.564368991 +0800
+@@ -70,9 +70,18 @@
+                 offset:         MTDPART_OFS_APPEND
+ 	}, {
+ 	        name:           "firmware",
+-	        size:           MTDPART_SIZ_FULL,
+-	        offset:         MTDPART_OFS_APPEND,
+-	}
++	        size:           0x500000,
++	        offset:         0x50000,
++	},{ 
++                name:           "firmware1",
++                size:           MTDPART_SIZ_FULL,
++                offset:         0x50000,
++        },{ 
++                name:           "firmware2",
++                size:           MTDPART_SIZ_FULL,
++                offset:         0x550000,
++        }
++	
+ };
+ #else /* CONFIG_SUPPORT_OPENWRT */
+ static struct mtd_partition rt2880_partitions[] = {
