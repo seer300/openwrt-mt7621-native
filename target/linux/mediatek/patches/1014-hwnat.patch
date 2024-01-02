@@ -1,0 +1,105 @@
+Index: linux-3.10.20/net/nat/hw_nat/ra_nat.c
+===================================================================
+--- linux-3.10.20.orig/net/nat/hw_nat/ra_nat.c
++++ linux-3.10.20/net/nat/hw_nat/ra_nat.c
+@@ -3577,12 +3577,14 @@ static void PpeSetDstPort(uint32_t Ebl)
+ 	struct net_device *dev;
+ #if defined (CONFIG_SUPPORT_OPENWRT)
+ 	dev=ra_dev_get_by_name("eth0");
+-	printk("eth2 ifindex =%x\n", dev->ifindex);
++	printk("eth0 ifindex =%x\n", dev->ifindex);
+ 	DstPort[dev->ifindex] = dev;
++	DP_GMAC1 = dev->ifindex;
+ #ifdef CONFIG_RAETH_GMAC2
+ 	dev=ra_dev_get_by_name("eth1");
+-	printk("eth2 ifindex =%x\n", dev->ifindex);
++	printk("eth1 ifindex =%x\n", dev->ifindex);
+ 	DstPort[dev->ifindex] = dev;
++	DPORT_GMAC2 = dev->ifindex;;
+ #endif
+ #else
+ 	dev=ra_dev_get_by_name("eth2");
+@@ -3616,9 +3618,12 @@ static void PpeSetDstPort(uint32_t Ebl)
+ 	DstPort[DP_USB] = ra_dev_get_by_name("eth1");	// USB interface name
+ #endif // CONFIG_RA_HW_NAT_NIC_USB //
+     } else {
+-    	
+-    	
+-#if defined (CONFIG_RA_HW_NAT_WIFI_NEW_ARCH)   	
++#if defined (CONFIG_RA_HW_NAT_WIFI_NEW_ARCH)
++
++#if 1
++	if (DstPort[DP_GMAC]) dev_put(DstPort[DP_GMAC]);
++	if (DstPort[DP_GMAC2]) dev_put(DstPort[DP_GMAC2]);
++#else
+ 
+ 	int j = 0;
+ 	for (j=0; j<MAX_IF_NUM; j++){
+@@ -3627,9 +3632,9 @@ static void PpeSetDstPort(uint32_t Ebl)
+ 			DstPort[j] = NULL;
+ 		}
+ 	}
+-#endif  	
+-    
+-    	
++#endif
++#endif
++
+ #if !defined (CONFIG_RA_HW_NAT_WIFI_NEW_ARCH)
+ #if defined (CONFIG_RA_HW_NAT_WIFI)
+ 	if (DstPort[DP_RA0] != NULL) {
+@@ -3943,15 +3948,7 @@ static void SetAclFwd(uint32_t Ebl)
+ 
+ 	if(Ebl){
+ #if defined (CONFIG_SUPPORT_OPENWRT)
+-#if defined (CONFIG_RAETH_SPECIAL_TAG)
+-#if defined (CONFIG_WAN_AT_P4)
+-		WanInt = ra_dev_get_by_name("eth0.5");
+-#else
+-		WanInt = ra_dev_get_by_name("eth0.1");
+-#endif
+-#else
+-		WanInt = ra_dev_get_by_name("eth0.2");
+-#endif
++		WanInt = ra_dev_get_by_name("eth1")
+ #else
+ #if defined (CONFIG_RAETH_SPECIAL_TAG)
+ #if defined (CONFIG_WAN_AT_P4)
+@@ -3963,7 +3960,7 @@ static void SetAclFwd(uint32_t Ebl)
+ 		WanInt = ra_dev_get_by_name("eth2.2");
+ #endif
+ #endif
+-		LanInt = ra_dev_get_by_name("br0");
++		LanInt = ra_dev_get_by_name("br-lan");
+ 		for(i = 0;i< 6;i++){
+ 			value = RegRead(RALINK_ETH_SW_BASE + 0x2004 + (i * 0x100));
+ 			value |= (0x1 << 10);
+Index: linux-3.10.20/net/nat/hw_nat/Kconfig
+===================================================================
+--- linux-3.10.20.orig/net/nat/hw_nat/Kconfig
++++ linux-3.10.20/net/nat/hw_nat/Kconfig
+@@ -370,11 +370,10 @@ config  PPE_MCAST
+ config  RA_HW_NAT_WIFI
+ 	bool "WiFi Acceleration"
+ 	depends on RA_HW_NAT 
+-	select RA_HW_NAT_WIFI_NEW_ARCH if CHIP_MT7615E
+ 	
+ config  RA_HW_NAT_WIFI_NEW_ARCH
+-	bool "WiFi Acceleration New Architecture"
+-	depends on RA_HW_NAT_WIFI && CHIP_MT7615E
++	bool "WiFi Acceleration New Architecture (7615 only)"
++	depends on RA_HW_NAT_WIFI
+ 	
+ config  RA_HW_NAT_NIC_USB
+ 	bool "PCIe Ethernet NIC/USB Acceleration"
+Index: linux-3.10.20/net/nat/hw_nat/Makefile
+===================================================================
+--- linux-3.10.20.orig/net/nat/hw_nat/Makefile
++++ linux-3.10.20/net/nat/hw_nat/Makefile
+@@ -23,3 +23,6 @@ ifeq ($(CONFIG_RAETH_GMAC2),y)
+ 	EXTRA_CFLAGS += -DCONFIG_PSEUDO_SUPPORT
+ endif
+ 
++# support wifi hwnat in openwrt
++EXTRA_CFLAGS += -DCONFIG_MBSS_SUPPORT -DCONFIG_RTDEV
++

@@ -1,0 +1,130 @@
+#!/bin/sh
+SDK=openwrt
+ARCH=MIPS
+CHIP_TYPE=mt7621
+LINUX_VERSION=3.18.29
+KERNEL_PATCHVER=3.18
+VERSION=1.7.5
+BUILD_DATE=202312291554
+APNAME=MT7621_SW5_5G
+MODELNAME=IK-SW5
+FRONT_PORTS=0
+FIRMWARE_SSL=
+DEVELOPER=
+SUPPORT_8021X=
+AP_MANUF=Frelink
+SUPPORT_WIFI6=
+SUPPORT_NET_OPTIMIZE=
+DISABLED_ACCESS_STRATEGY_AUTOHIDE=true
+DISABLED_ACCESS_STRATEGY_ACCESS_DENY=
+UPLINK_PORT=4
+UPLINK_PORT2=6
+
+TARGET_FIRM_NAME="firmware1"
+RAM_ROOT=/tmp/ikroot
+
+supivot()
+{
+	mount | grep "on $1 type" 2>&- 1>&- || mount -o bind $1 $1
+	mount -o noatime,move /proc $1/proc && \
+	pivot_root $1 $1$2 || {
+		umount -l $1 $1
+		return 1
+	}
+
+	mount -o noatime,move $2/sys /sys
+	mount -o noatime,move $2/dev /dev
+	mount -o noatime,move $2/tmp /tmp
+	return 0
+}
+
+install_rootfs()
+{
+	rm -rf $RAM_ROOT
+	mkdir -p $RAM_ROOT
+
+	mkdir -p $RAM_ROOT/mnt $RAM_ROOT/proc $RAM_ROOT/sys $RAM_ROOT/dev $RAM_ROOT/tmp $RAM_ROOT/overlay $RAM_ROOT/old_root
+	cp -rpf /etc /lib /bin /sbin /usr $RAM_ROOT
+	if ! supivot $RAM_ROOT /old_root ;then
+		echo "supivot fail, want restart system"
+		reboot
+		exit 1
+	fi
+}
+
+get_mtd_num() {
+	awk '$NF=="\"'$1'\""{gsub(":","");gsub(":","");print $1;exit}' /proc/mtd
+}
+
+nand_write()
+{
+	local mtddev=$1 firm=$2
+
+	local max_try_count=5
+	local size=$(ls -l $firm |awk '{print $5}' )
+	if [ "${size:-0}" = 0 ];then
+		echo "nand_write: invalid size"
+		return 1
+	fi
+
+	local orig_md5=$(md5sum $firm)
+	if [ ! "$orig_md5" ];then
+		echo "nand_write: md5sum $firm failure"
+		return 1
+	fi
+
+	while [ $max_try_count -ge 1 ];do
+		flash_erase -N /dev/$mtddev 0 0
+		nandwrite -a -m /dev/$mtddev $firm
+
+		local mtd_md5=$(nanddump -q -a -l $size /dev/$mtddev |md5sum)
+		if [ "${mtd_md5:0:32}" = "${orig_md5:0:32}" ];then
+			echo -e "nand_write: write $firm to /dev/$mtddev is complete.\n"
+			return 0
+		else
+			echo -e "nand_write: write $firm to /dev/$mtddev check md5sum failure.\n"
+		fi
+		max_try_count=$((max_try_count-1))
+	done
+
+	echo -e "nand_write: failed\n"
+	return 1
+}
+
+mtd_write()
+{
+	local firmware=$1
+	mtd_firmware=$(get_mtd_num $TARGET_FIRM_NAME)
+	mtd_type=$(cat /sys/class/mtd/$mtd_firmware/type)
+
+	if [ ! "$mtd_firmware" ];then
+		echo "Not found part '$TARGET_FIRM_NAME'"
+		exit 1
+	fi
+
+	install_rootfs
+	if [ "$mtd_type" = "nand" ];then
+		if nand_write $mtd_firmware $firmware ;then
+			#No callbcak
+			reboot -f
+			exit 0
+		else
+			exit 1
+		fi
+	else
+		if ! mtd -r write $firmware $TARGET_FIRM_NAME ;then
+			if ! mtd -r write $firmware $TARGET_FIRM_NAME ;then
+				exit 1
+			fi
+		fi
+
+		exit 0
+	fi
+}
+
+if [ -f /tmp/ikfirm2.bin ];then
+	mtd_write /tmp/ikfirm2.bin
+else
+	echo "Not found /tmp/ikfirm2.bin"
+	exit 1
+fi

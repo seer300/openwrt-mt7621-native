@@ -1,0 +1,28 @@
+Index: linux-3.10.14/drivers/usb/core/Makefile
+===================================================================
+--- linux-3.10.14.orig/drivers/usb/core/Makefile
++++ linux-3.10.14/drivers/usb/core/Makefile
+@@ -4,8 +4,6 @@
+ 
+ ccflags-$(CONFIG_USB_DEBUG) := -DDEBUG
+ 
+-obj-$(CONFIG_RALINK_MT7628) += ../host/mtk-phy.o ../host/mtk-phy-7628.o ../host/mtk-phy-ahb.o
+-
+ usbcore-y := usb.o hub.o hcd.o urb.o message.o driver.o
+ usbcore-y += config.o file.o buffer.o sysfs.o endpoint.o
+ usbcore-y += devio.o notify.o generic.o quirks.o devices.o
+Index: linux-3.10.14/drivers/usb/host/Makefile
+===================================================================
+--- linux-3.10.14.orig/drivers/usb/host/Makefile
++++ linux-3.10.14/drivers/usb/host/Makefile
+@@ -14,6 +14,10 @@ fhci-$(CONFIG_FHCI_DEBUG) += fhci-dbg.o
+ xhci-hcd-y := xhci.o xhci-mem.o
+ xhci-hcd-y += xhci-ring.o xhci-hub.o xhci-dbg.o
+ 
++ifneq ($(CONFIG_RALINK_MT7628), )
++obj-y += ../host/mtk-phy.o ../host/mtk-phy-7628.o ../host/mtk-phy-ahb.o
++endif
++
+ ifndef CONFIG_USB_MT7621_XHCI_PLATFORM
+ xhci-hcd-$(CONFIG_PCI)	+= xhci-pci.o
+ endif

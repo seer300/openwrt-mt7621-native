@@ -1,0 +1,17 @@
+Index: linux-3.10.20/kernel/sched/rt.c
+===================================================================
+--- linux-3.10.20.orig/kernel/sched/rt.c
++++ linux-3.10.20/kernel/sched/rt.c
+@@ -1102,8 +1102,11 @@ static int sched_rt_runtime_exceeded(str
+ 
+ 	if (rt_rq->rt_time > runtime) {
+ 		struct rt_bandwidth *rt_b = sched_rt_bandwidth(rt_rq);
++#ifdef CONFIG_RT_GROUP_SCHED
+ 		int cpu = rq_cpu(rt_rq->rq);
+-
++#else
++		int cpu = 0;
++#endif
+ 		printk_sched("sched: cpu=%d rt_time %llu <-> runtime"
+ 			     " [%llu -> %llu], exec_delta_time[%llu]"
+ 			     ", clock_task[%llu], exec_start[%llu]\n",

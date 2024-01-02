@@ -1,0 +1,47 @@
+#!/bin/sh
+
+echo S99run > /tmp/S99.log
+
+dump_firmware2()
+{
+(
+	firm2_mtd=$(awk '{gsub("[\":]","");if($NF=="firmware2")print $1}' /proc/mtd )
+	if [ ! "$firm2_mtd" ];then
+		echo "Not found part 'firmware2' in /proc/mtd" >> /tmp/mmlog
+		return 1
+	fi
+
+	dd if=/dev/$firm2_mtd of=/tmp/firm2_info bs=1k count=1 >/dev/null 2>&1
+	cat /tmp/firm2_info |while read a; do echo $a >> /tmp/firm2_info.tmp ;done
+	if [ ! -f /tmp/firm2_info.tmp ];then
+		echo "Not found iKuai params in /tmp/firm2_info" >> /tmp/mmlog
+		return 1
+	fi
+	mv /tmp/firm2_info.tmp /tmp/firm2_info
+	if ! . /tmp/firm2_info ;then
+		echo "Not found iKuai params in /tmp/firm2_info" >> /tmp/mmlog
+		return 1
+	fi
+
+	if [ "$length" = "" -o "$md5" = "" -o "$((length % 1024))" != 0 ];then
+		echo "invalid param: length md5" >> /tmp/mmlog
+		return 1
+	fi
+
+	local dd_count=$((length / 1024))
+	echo "dumping firmware2 to /tmp/ikfirm2.bin" >> /tmp/mmlog
+	dd if=/dev/$firm2_mtd of=/tmp/ikfirm2.bin bs=1k skip=1 count=$dd_count >/dev/null 2>&1
+
+	local firm2_md5=$(md5sum /tmp/ikfirm2.bin)
+	if [ "${firm2_md5:0:32}" != "$md5" ];then
+		echo "check firmwar2 md5sum failure: $md5 != ${firm2_md5:0:32}" >> /tmp/mmlog
+		rm -f /tmp/ikfirm2.bin
+		return 1
+	fi
+
+	echo "dumping firmware2 successfully" >> /tmp/mmlog
+	return 0
+)
+}
+dump_firmware2
+

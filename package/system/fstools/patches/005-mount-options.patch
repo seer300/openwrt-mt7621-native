@@ -1,0 +1,102 @@
+Index: fstools-2015-02-25.1/block.c
+===================================================================
+--- fstools-2015-02-25.1.orig/block.c
++++ fstools-2015-02-25.1/block.c
+@@ -541,7 +541,7 @@ static int _cache_load(const char *path)
+ static void cache_load(int mtd)
+ {
+ 	if (mtd) {
+-		_cache_load("/dev/mtdblock*");
++		//_cache_load("/dev/mtdblock*");
+ 		_cache_load("/dev/ubiblock*");
+ 		_cache_load("/dev/ubi?*_?*");
+ 	}
+@@ -749,6 +749,11 @@ static int mount_device(struct blkid_str
+ 	if (m && m->extroot)
+ 		return -1;
+ 
++	char _data[128] = {0};
++	if (strstr(pr->id->name, "fat") || strstr(pr->id->name, "ntfs")) {
++		snprintf(_data, sizeof(_data), "%s", "iocharset=utf8,uid=65534,gid=65534");
++	}
++
+ 	if (m) {
+ 		char *target = m->target;
+ 		char _target[32];
+@@ -760,13 +765,15 @@ static int mount_device(struct blkid_str
+ 			target = _target;
+ 		}
+ 		mkdir_p(target);
++		chmod(target, 0777);
++		fprintf(stderr, "%s\n", target);
+ 
+ 		if (check_fs)
+ 			check_filesystem(pr);
+ 
+ 		while (1) {
+ 			err = mount(pr->dev, target, pr->id->name, mflags,
+-						(m->options) ? (m->options) : (""));
++						(m->options) ? (m->options) : _data);
+ 			if (err) {
+ 				if (!(mflags & MS_RDONLY))
+ 				{
+@@ -781,6 +788,7 @@ static int mount_device(struct blkid_str
+ 				}
+ 			}
+ 			else {
++				chmod(target, 0777);
+ 				handle_swapfiles(true);
+ 				break;
+ 			}
+@@ -795,12 +803,13 @@ static int mount_device(struct blkid_str
+ 
+ 		snprintf(target, sizeof(target), "/mnt/%s", device);
+ 		mkdir_p(target);
++		chmod(target, 0777);
+ 
+ 		if (check_fs)
+ 			check_filesystem(pr);
+ 
+ 		while (1) {
+-			err = mount(pr->dev, target, pr->id->name, mflags, "");
++			err = mount(pr->dev, target, pr->id->name, mflags, _data);
+ 			if (err) {
+ 				if (!(mflags & MS_RDONLY)) {
+ 					ERROR("Fall back on RO mount. %s.\n", strerror(errno));
+@@ -814,6 +823,7 @@ static int mount_device(struct blkid_str
+ 				}
+ 			}
+ 			else {
++				chmod(target, 0777);
+ 				handle_swapfiles(true);
+ 				break;
+ 			}
+@@ -1114,6 +1124,7 @@ static int mount_extroot(char *cfg)
+ 	struct blkid_struct_probe *pr;
+ 	struct mount *m;
+ 	int err = -1;
++	char _data[128];
+ 
+ 	/* Load @cfg/etc/config/fstab */
+ 	if (config_load(cfg))
+@@ -1141,6 +1152,11 @@ static int mount_extroot(char *cfg)
+ 		pr = find_block_info(m->uuid, m->label, m->device);
+ 	}
+ 	if (pr) {
++
++		if (strstr(pr->id->name, "fat") || strstr(pr->id->name, "ntfs")) {
++			snprintf(_data, sizeof(_data), "%s", "iocharset=utf8,uid=65534,gid=65534");
++		}
++
+ 		if (strncmp(pr->id->name, "ext", 3) &&
+ 			strncmp(pr->id->name, "ubifs", 5)) {
+ 			ERROR("extroot: unsupported filesystem %s, try ext4\n", pr->id->name);
+@@ -1159,7 +1175,7 @@ static int mount_extroot(char *cfg)
+ 		if (check_fs)
+ 			check_filesystem(pr);
+ 
+-		err = mount(pr->dev, path, pr->id->name, 0, (m->options) ? (m->options) : (""));
++		err = mount(pr->dev, path, pr->id->name, 0, (m->options) ? (m->options) : _data);
+ 
+ 		if (err) {
+ 			ERROR("extroot: mounting %s (%s) on %s failed: %d (%s)\n",

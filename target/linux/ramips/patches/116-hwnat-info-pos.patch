@@ -1,0 +1,32 @@
+Index: linux-3.10.14/net/nat/hw_nat/ra_nat.h
+===================================================================
+--- linux-3.10.14.orig/net/nat/hw_nat/ra_nat.h
++++ linux-3.10.14/net/nat/hw_nat/ra_nat.h
+@@ -223,18 +223,12 @@ typedef struct {
+ #define FOE_MAGIC_PPE		    0x7276
+ 
+ /* choose one of them to keep HNAT related information in somewhere. */
+-#if defined (CONFIG_SUPPORT_OPENWRT)
+-//#define HNAT_USE_HEADROOM
+-//#define HNAT_USE_TAILROOM
+-#define HNAT_USE_SKB_CB
+-#else
+ //#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)) && defined (CONFIG_MT7621_ASIC)
+ //#define HNAT_USE_TAILROOM
+ //#else
+ #define HNAT_USE_HEADROOM
+ //#endif
+ //#define HNAT_USE_SKB_CB
+-#endif
+ 
+ #if defined (HNAT_USE_HEADROOM)
+ #define IS_SPACE_AVAILABLED(skb)    ((skb_headroom(skb) >= FOE_INFO_LEN) ? 1 : 0)
+@@ -287,7 +281,7 @@ typedef struct {
+ 
+ #elif defined (HNAT_USE_SKB_CB)
+ //change the position of skb_CB if necessary
+-#define CB_OFFSET		    32
++#define CB_OFFSET		    42
+ #define IS_SPACE_AVAILABLED(skb)    1
+ #define FOE_INFO_START_ADDR(skb)    (skb->cb +  CB_OFFSET)
+ 

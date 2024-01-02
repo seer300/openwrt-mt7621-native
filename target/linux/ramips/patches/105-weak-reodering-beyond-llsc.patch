@@ -1,0 +1,12 @@
+Index: linux-3.10.14/arch/mips/Kconfig
+===================================================================
+--- linux-3.10.14.orig/arch/mips/Kconfig
++++ linux-3.10.14/arch/mips/Kconfig
+@@ -90,6 +90,7 @@ config RALINK_MT7621
+ 	select SYS_SUPPORTS_MULTITHREADING
+ 	select SYS_SUPPORTS_SMP
+ 	select SYS_SUPPORTS_MIPS_CMP
++	select WEAK_REORDERING_BEYOND_LLSC
+ 	select IRQ_GIC
+ 	help
+ 	  Ralink evaluation board based on MT7621

@@ -1,0 +1,42 @@
+Index: linux-3.10.20/drivers/misc/mediatek/nand/mt7623/mtk_nand.c
+===================================================================
+--- linux-3.10.20.orig/drivers/misc/mediatek/nand/mt7623/mtk_nand.c
++++ linux-3.10.20/drivers/misc/mediatek/nand/mt7623/mtk_nand.c
+@@ -6247,8 +6247,9 @@ static int mtk_nand_probe(struct platfor
+     nand_chip->write_page = mtk_nand_write_page;
+     nand_chip->read_page = mtk_nand_read_page;
+ 	nand_chip->read_subpage = mtk_nand_read_subpage;
+-    nand_chip->ecc.write_oob = mtk_nand_write_oob;
+-    nand_chip->ecc.read_oob = mtk_nand_read_oob;
++	/* OpenWrt: disable oob API, otherwise jffs2 will messing it. */
++    nand_chip->ecc.write_oob = NULL; // mtk_nand_write_oob;
++    nand_chip->ecc.read_oob = NULL; // mtk_nand_read_oob;
+     nand_chip->block_markbad = mtk_nand_block_markbad;   // need to add nand_get_device()/nand_release_device().
+     nand_chip->erase = mtk_nand_erase;
+     nand_chip->block_bad = mtk_nand_block_bad;
+@@ -6596,7 +6597,7 @@ static int mtk_nand_probe(struct platfor
+     part_init_pmt(mtd, (u8 *) & g_exist_Partition[0]);
+     err = mtd_device_register(mtd, g_exist_Partition, part_num);
+ #else
+-    err = mtd_device_register(mtd, g_pasStatic_Partition, 6);
++    err = mtd_device_register(mtd, g_pasStatic_Partition, 7);
+ #endif
+ 
+ #ifdef _MTK_NAND_DUMMY_DRIVER_
+Index: linux-3.10.20/drivers/misc/mediatek/nand/mt7623/partition_mt.c
+===================================================================
+--- linux-3.10.20.orig/drivers/misc/mediatek/nand/mt7623/partition_mt.c
++++ linux-3.10.20/drivers/misc/mediatek/nand/mt7623/partition_mt.c
+@@ -83,7 +83,11 @@ struct mtd_partition g_pasStatic_Partiti
+             offset:         MTDPART_OFS_APPEND
+      }, {
+             name:           "firmware",
+-            size:           MTDPART_SIZ_FULL,
++            size:           0xe000000, // FIXME: size here should be revised for nand chips of different sizes.
++            offset:         MTDPART_OFS_APPEND
++     }, {
++            name:           "bmt", // reserve bmt area for bad block remapping
++            size:           MTDPART_SIZ_FULL, // not less than BMT pool size!!!
+             offset:         MTDPART_OFS_APPEND
+      }
+ };

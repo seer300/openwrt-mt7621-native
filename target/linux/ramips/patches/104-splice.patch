@@ -1,0 +1,12 @@
+Index: linux-3.10.14/fs/splice.c
+===================================================================
+--- linux-3.10.14.orig/fs/splice.c
++++ linux-3.10.14/fs/splice.c
+@@ -1817,6 +1817,7 @@ cleanup:
+ 
+ 	goto done;
+ }
++EXPORT_SYMBOL(generic_splice_from_socket);
+ 
+ static int __init init_splice_pools(void)
+ {

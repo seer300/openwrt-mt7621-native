@@ -1,0 +1,38 @@
+Index: linux-3.10.20/drivers/mtd/ralink/ralink_nand.c
+===================================================================
+--- linux-3.10.20.orig/drivers/mtd/ralink/ralink_nand.c
++++ linux-3.10.20/drivers/mtd/ralink/ralink_nand.c
+@@ -377,7 +377,10 @@ static int nfc_check_wp(void)
+ 	int ret;
+ 
+ 	ret = _nfc_read_status(&result);
+-	//FIXME, if ret < 0
++	if (ret) {
++		printk(KERN_WARNING "unable to tell WP. default FALSE.\n");
++		return 0;
++	}
+ 
+ 	return !(result & NAND_STATUS_WP);
+ #endif
+@@ -1332,10 +1335,9 @@ nand_get_device(struct ra_nand_chip *ra,
+ 	int ret = 0;
+ 
+ #if !defined (__UBOOT__)
+-	ret = mutex_lock_interruptible(ra->controller);
++	mutex_lock(ra->controller);
+ #endif ///
+-	if (!ret) 
+-		ra->state = new_state;
++	ra->state = new_state;
+ 
+ 	return ret;
+ 
+@@ -2881,7 +2883,7 @@ static int ramtd_nand_writeoob(struct mt
+ 
+ 	ra_dbg("%s: \n", __func__);
+ 
+-	nand_get_device(ra, FL_READING);
++	nand_get_device(ra, FL_WRITING);
+ 
+ 	ret = nand_do_write_ops(ra, to, ops);
+ 

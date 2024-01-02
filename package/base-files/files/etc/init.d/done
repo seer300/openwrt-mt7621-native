@@ -1,0 +1,24 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006 OpenWrt.org
+
+START=95
+boot() {
+	[ -d /tmp/root ] && {
+		cat /proc/cpuinfo | grep 7623
+		if [ "$?" == "0" ]; then
+			mount_root2 done;
+		else
+			mount_root done;
+		fi
+	}
+	block mount
+
+	# process user commands
+	[ -f /etc/rc.local ] && {
+		sh /etc/rc.local
+	}
+
+	# set leds to normal state
+	. /etc/diag.sh
+	set_state done
+}

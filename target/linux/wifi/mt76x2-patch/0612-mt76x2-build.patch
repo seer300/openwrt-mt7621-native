@@ -1,0 +1,75 @@
+Index: linux-3.10.14/drivers/net/wireless/rlt_wifi_ap/Kconfig
+===================================================================
+--- linux-3.10.14.orig/drivers/net/wireless/rlt_wifi_ap/Kconfig
++++ linux-3.10.14/drivers/net/wireless/rlt_wifi_ap/Kconfig
+@@ -4,6 +4,7 @@ config RLT_AP_SUPPORT
+ 	select WIRELESS_EXT
+ 	select WEXT_SPY
+ 	select WEXT_PRIV
++	default m
+ 
+ config WDS_SUPPORT
+ 	bool "WDS"
+Index: linux-3.10.14/drivers/net/wireless/rlt_wifi_ap/Makefile
+===================================================================
+--- linux-3.10.14.orig/drivers/net/wireless/rlt_wifi_ap/Makefile
++++ linux-3.10.14/drivers/net/wireless/rlt_wifi_ap/Makefile
+@@ -1,12 +1,6 @@
+-ifeq ($(CONFIG_SUPPORT_OPENWRT),y)
+-EXTRA_CFLAGS = -I$(src)/../src/include -I$(src)/../src/ate/include
+-DRV_NAME = mt76x2e
+-RT_WIFI_DIR = ../src
+-else
+ EXTRA_CFLAGS = -Idrivers/net/wireless/rlt_wifi/include -Idrivers/net/wireless/rlt_wifi/ate/include
+ DRV_NAME = rlt_wifi
+ RT_WIFI_DIR = ../rlt_wifi
+-endif
+ 
+ ########################################################
+ # Common files
+@@ -649,11 +643,7 @@ endif
+ #
+ # Root 
+ #
+-ifeq ($(CONFIG_SUPPORT_OPENWRT),y)
+-obj-m += $(DRV_NAME).o
+-else
+ obj-$(CONFIG_RLT_AP_SUPPORT) += $(DRV_NAME).o
+-endif
+ 
+ $(DRV_NAME)-objs += $(cmm_objs) $(asic_objs) $(chip_objs) $(rate_objs)\
+                     $(spec_objs) $(func_objs) $(ap_objs) $(os_objs)
+@@ -752,25 +742,6 @@ EXTRA_CFLAGS += -DTHERMAL_PROTECT_SUPPOR
+ endif
+ endif
+ 
+-# For OpenWrt compatibility
+-ifeq ($(CONFIG_SUPPORT_OPENWRT),y)
+-EXTRA_CFLAGS += -DCONFIG_RT_FIRST_CARD=$(CONFIG_RT_FIRST_CARD)
+-EXTRA_CFLAGS += -DCONFIG_RT_SECOND_CARD=$(CONFIG_RT_SECOND_CARD)
+-
+-EXTRA_CFLAGS += -DCONFIG_RT_FIRST_IF_RF_OFFSET=$(CONFIG_RT_FIRST_IF_RF_OFFSET)
+-EXTRA_CFLAGS += -DCONFIG_RT_SECOND_IF_RF_OFFSET=$(CONFIG_RT_SECOND_IF_RF_OFFSET)
+-
+-ifeq ($(CONFIG_FIRST_IF_EEPROM_PROM),y)
+-EXTRA_CFLAGS += -DCONFIG_RT_FIRST_CARD_EEPROM="\"prom\""
+-else
+-ifeq ($(CONFIG_FIRST_IF_EEPROM_EFUSE),y)
+-EXTRA_CFLAGS += -DCONFIG_RT_FIRST_CARD_EEPROM="\"efuse\""
+-else
+-ifeq ($(CONFIG_FIRST_IF_EEPROM_FLASH),y)
+-EXTRA_CFLAGS += -DCONFIG_RT_FIRST_CARD_EEPROM="\"flash\""
+-endif
+-endif
+-endif
+ 
+ ifeq ($(CONFIG_SECOND_IF_EEPROM_PROM),y)
+ EXTRA_CFLAGS += -DCONFIG_RT_SECOND_CARD_EEPROM="\"prom\""
+@@ -784,7 +755,6 @@ endif
+ endif
+ endif
+ 
+-endif
+ 
+ ifeq ($(CONFIG_DISABLE_EDCCA),y)
+ EXTRA_CFLAGS += -DCONFIG_DISABLE_EDCCA

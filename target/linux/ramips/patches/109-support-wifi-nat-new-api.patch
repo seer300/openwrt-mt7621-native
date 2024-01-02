@@ -1,0 +1,33 @@
+Index: linux-3.10.14/net/nat/hw_nat/Kconfig
+===================================================================
+--- linux-3.10.14.orig/net/nat/hw_nat/Kconfig
++++ linux-3.10.14/net/nat/hw_nat/Kconfig
+@@ -370,11 +370,10 @@ config  PPE_MCAST
+ config  RA_HW_NAT_WIFI
+ 	bool "WiFi Acceleration"
+ 	depends on RA_HW_NAT 
+-	select RA_HW_NAT_WIFI_NEW_ARCH if CHIP_MT7615E
+ 	
+ config  RA_HW_NAT_WIFI_NEW_ARCH
+ 	bool "WiFi Acceleration New Architecture"
+-	depends on RA_HW_NAT_WIFI && CHIP_MT7615E
++	depends on RA_HW_NAT_WIFI
+ 	
+ config  RA_HW_NAT_NIC_USB
+ 	bool "PCIe Ethernet NIC/USB Acceleration"
+Index: linux-3.10.14/net/nat/hw_nat/ra_nat.c
+===================================================================
+--- linux-3.10.14.orig/net/nat/hw_nat/ra_nat.c
++++ linux-3.10.14/net/nat/hw_nat/ra_nat.c
+@@ -2089,9 +2089,11 @@ static void PpeSetInfoBlk2(struct _info_
+ 	iblk2->fpidx = fpidx;
+ #endif
+ 
++#if defined(CONFIG_ARCH_MT7623) || defined(CONFIG_RALINK_MT7621)
+ #if !defined (CONFIG_RAETH_QDMA)
+ 	iblk2->fqos = 0; /* PDMA MODE should not goes to QoS*/
+ #endif
++#endif
+ 
+ 	iblk2->port_mg = port_mg;
+ 	iblk2->port_ag = port_ag;

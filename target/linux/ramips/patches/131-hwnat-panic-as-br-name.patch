@@ -1,0 +1,16 @@
+Index: linux-3.10.14/net/nat/hw_nat/ra_nat.c
+===================================================================
+--- linux-3.10.14.orig/net/nat/hw_nat/ra_nat.c
++++ linux-3.10.14/net/nat/hw_nat/ra_nat.c
+@@ -435,7 +435,11 @@ void get_bridge_info(void)
+ 	struct net_device *br0_dev; 
+ 	struct in_device *br0_in_dev;
+ 	
++#if defined (CONFIG_SUPPORT_OPENWRT)
++	br0_dev = dev_get_by_name_rcu(&init_net,"br-lan");
++#else
+ 	br0_dev = dev_get_by_name_rcu(&init_net,"br0"); 
++#endif
+ 	br0_in_dev = in_dev_get(br0_dev);
+ 	brNetmask = ntohl(br0_in_dev->ifa_list->ifa_mask);
+ 	br0Ip = ntohl(br0_in_dev->ifa_list->ifa_address);

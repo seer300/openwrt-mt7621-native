@@ -1,0 +1,39 @@
+Index: linux-3.10.20/drivers/misc/mediatek/nand/mt7623/mtk_nand.c
+===================================================================
+--- linux-3.10.20.orig/drivers/misc/mediatek/nand/mt7623/mtk_nand.c
++++ linux-3.10.20/drivers/misc/mediatek/nand/mt7623/mtk_nand.c
+@@ -6229,7 +6229,7 @@ static int mtk_nand_probe(struct platfor
+     nand_chip->read_buf = mtk_nand_read_buf;
+     nand_chip->write_buf = mtk_nand_write_buf;
+ #ifdef CONFIG_MTD_NAND_VERIFY_WRITE
+-    nand_chip->verify_buf = mtk_nand_verify_buf;
++    nand_chip->verify_buf = NULL; //mtk_nand_verify_buf;
+ #endif
+     nand_chip->select_chip = mtk_nand_select_chip;
+     nand_chip->dev_ready = mtk_nand_dev_ready;
+@@ -6597,7 +6597,7 @@ static int mtk_nand_probe(struct platfor
+     part_init_pmt(mtd, (u8 *) & g_exist_Partition[0]);
+     err = mtd_device_register(mtd, g_exist_Partition, part_num);
+ #else
+-    err = mtd_device_register(mtd, g_pasStatic_Partition, 7);
++    err = mtd_device_register(mtd, g_pasStatic_Partition, 8);
+ #endif
+ 
+ #ifdef _MTK_NAND_DUMMY_DRIVER_
+Index: linux-3.10.20/drivers/misc/mediatek/nand/mt7623/partition_mt.c
+===================================================================
+--- linux-3.10.20.orig/drivers/misc/mediatek/nand/mt7623/partition_mt.c
++++ linux-3.10.20/drivers/misc/mediatek/nand/mt7623/partition_mt.c
+@@ -83,7 +83,11 @@ struct mtd_partition g_pasStatic_Partiti
+             offset:         MTDPART_OFS_APPEND
+      }, {
+             name:           "firmware",
+-            size:           0xe000000, // FIXME: size here should be revised for nand chips of different sizes.
++            size:           0x2000000, // big enough to contain sysupgrade image (kernel+rootfs)
++            offset:         MTDPART_OFS_APPEND
++     }, {
++            name:           "rootfs_data",
++            size:           0xc000000, // FIXME: size here should be revised for nand chips of different sizes.
+             offset:         MTDPART_OFS_APPEND
+      }, {
+             name:           "bmt", // reserve bmt area for bad block remapping

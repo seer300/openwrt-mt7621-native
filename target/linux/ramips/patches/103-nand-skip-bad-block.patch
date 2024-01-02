@@ -1,0 +1,37 @@
+Index: linux-3.10.14/drivers/mtd/nand/mtk_nand.c
+===================================================================
+--- linux-3.10.14.orig/drivers/mtd/nand/mtk_nand.c
++++ linux-3.10.14/drivers/mtd/nand/mtk_nand.c
+@@ -2280,6 +2280,7 @@ static int get_start_end_block(struct mt
+                 *end_blk = *start_blk + (g_pasStatic_Partition[i].size >> chip->phys_erase_shift) - 1;
+                 if ((block >= *start_blk) && (block <= *end_blk))
+ 		{
++#ifndef CONFIG_SUPPORT_OPENWRT
+ #ifdef CONFIG_RT2880_ROOTFS_IN_FLASH
+ 			if ( i == (NAND_MTD_ROOTFS_PARTITION_NO-1))
+ 			{
+@@ -2290,6 +2291,7 @@ static int get_start_end_block(struct mt
+ 				*start_blk -= (g_pasStatic_Partition[i-1].size >> chip->phys_erase_shift);
+ 			}
+ #endif
++#endif
+                         break;
+ 		}
+                 *start_blk = *end_blk + 1;
+@@ -4807,6 +4809,7 @@ int mtk_nand_probe()
+     g_pasStatic_Partition[2].size = LARGE_MTD_CONFIG_PART_SIZE;
+     g_pasStatic_Partition[3].size = LARGE_MTD_FACTORY_PART_SIZE;
+ #ifdef CONFIG_RT2880_ROOTFS_IN_FLASH
++#ifndef CONFIG_SUPPORT_OPENWRT
+ 	//g_pasStatic_Partition[4].size = CONFIG_MTD_KERNEL_PART_SIZ;
+ 	g_pasStatic_Partition[5].size = IMAGE1_SIZE - (LARGE_MTD_BOOT_PART_SIZE + LARGE_MTD_CONFIG_PART_SIZE \
+ 			                    + LARGE_MTD_FACTORY_PART_SIZE + CONFIG_MTD_KERNEL_PART_SIZ) - MTD_ROOTFS_RESERVED_BLOCK;
+@@ -4842,7 +4845,7 @@ int mtk_nand_probe()
+ 	}
+ 
+ #endif
+-
++#endif
+ #ifndef CONFIG_SUPPORT_OPENWRT
+ #ifdef CONFIG_ROOTFS_IN_FLASH_NO_PADDING
+ #error "No code to handle this case in MTK NAND Driver.."	

@@ -1,0 +1,819 @@
+Index: fstools-2015-02-25.1/mount_root2.c
+===================================================================
+--- /dev/null
++++ fstools-2015-02-25.1/mount_root2.c
+@@ -0,0 +1,799 @@
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <errno.h>
++#include <string.h>
++#include <glob.h>
++#include <dirent.h>
++#include <fcntl.h>
++#include <asm/byteorder.h>
++#include <unistd.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <sys/mount.h>
++
++
++#define OK (0)
++#define NG (-1)
++
++#if 0
++#define API(...)  fprintf(stderr, "<api> %s\n", __FUNCTION__)
++
++#define DEBUG(...) \
++    do {\
++        fprintf(stderr, "<dbg> ");\
++        fprintf(stderr, __VA_ARGS__);\
++        fprintf(stderr, " %s, L%d.\n", __FUNCTION__, __LINE__);\
++    } while(0)
++
++
++#define DUMP_MOUNT() \
++    do { \
++        fprintf(stderr, "<<<<<<<<<< %s, L%d.\n", __FUNCTION__, __LINE__);\
++        FILE *fp = fopen("/proc/mounts", "r");\
++        static char line[256];\
++        if(!fp) break;\
++        while (fgets(line, sizeof(line), fp)) {\
++            fprintf(stderr, "%s", line);\
++        }\
++        fclose(fp);\
++        fprintf(stderr, ">>>>>>>>>> %s, L%d.\n", __FUNCTION__, __LINE__);\
++    } while(0)
++
++#define LIST_UBIDEV() do{\
++        fprintf(stderr, "<%s> L%d.", __FUNCTION__, __LINE__);\
++        system("ls -l /dev/ubi*");\
++        system("find /sys/ -name \"*ubi*\"");\
++    }while(0)
++#else
++#define API(...)
++#define DEBUG(...)
++#define DUMP_MOUNT()
++#define LIST_UBIDEV()
++#endif
++
++
++#define WAIT_UBIDEV(timeout) do{\
++    int t = timeout;\
++    while (t>=0 && access("/dev/ubi0_0", R_OK)) {\
++        fprintf(stderr, "wait for /dev/ubi0_0, %d\n", t);\
++        sleep(1); \
++        t--;\
++    }\
++    if (0 == access("/dev/ubi0_0", R_OK)) \
++        fprintf(stderr, "found /dev/ubi0_0!\n"); \
++    else\
++        fprintf(stderr, "timeout, break!\n");\
++    } while(0)
++
++
++enum
++{
++    FS_NONE, /* freash start */
++    FS_DEADCODE, /* factory reset */
++    FS_JFFS2,
++    FS_UBIFS,
++    FS_EXT4,
++};
++
++extern int pivot_root(const char *new_root, const char *put_old);
++
++static char* find_mtd_dev(char *name)
++{
++    FILE *fp = fopen("/proc/mtd", "r");
++    static char line[256] = {'/','d','e','v','/',};
++
++    if(!fp) return NULL;
++
++    while (fgets(line+5, sizeof(line)-5, fp))
++    {
++        char *ret;
++        if ((ret = strstr(line, name)) && (ret[strlen(name)] == '"'))
++        {
++            char *eol = strstr(line, ":");
++            if (!eol) continue;
++            *eol = '\0';
++            break;
++        }
++    }
++
++    fclose(fp);
++
++    return line;
++}
++
++
++static int find_filesystem(char *fs)
++{
++    FILE *fp = fopen("/proc/filesystems", "r");
++    static char line[256];
++    int ret = NG;
++
++    if (!fp)
++    {
++        DEBUG("opening /proc/filesystems failed: %s", strerror(errno));
++        goto out;
++    }
++
++    while (ret && fgets(line, sizeof(line), fp))
++        if (strstr(line, fs))
++            ret = OK;
++
++    fclose(fp);
++
++out:
++    return ret;
++}
++
++static int find_overlay_mount(char *overlay)
++{
++    FILE *fp = fopen("/proc/mounts", "r");
++    static char line[256];
++    int ret = NG;
++
++    if(!fp)
++        return ret;
++
++    while (ret && fgets(line, sizeof(line), fp))
++        if (!strncmp(line, overlay, strlen(overlay)))
++            ret = OK;
++
++    fclose(fp);
++
++    return ret;
++}
++
++static char * find_mount_point(char *block, int mtd_only)
++{
++    FILE *fp = fopen("/proc/mounts", "r");
++    static char line[256];
++    int len = strlen(block);
++    char *point = NULL;
++
++    if(!fp)
++        return NULL;
++
++    while (fgets(line, sizeof(line), fp))
++    {
++        if (!strncmp(line, block, len))
++        {
++            char *p = &line[len + 1];
++            char *t = strstr(p, " ");
++
++            if (!t)
++            {
++                fclose(fp);
++                return NULL;
++            }
++
++            *t = '\0';
++            t++;
++
++            if (mtd_only &&
++                strncmp(t, "ext4", 4) &&
++                strncmp(t, "jffs2", 5) &&
++                strncmp(t, "ubifs", 5))
++            {
++                fclose(fp);
++                DEBUG("block is mounted with wrong fs %s", t);
++                return NULL;
++            }
++            point = p;
++
++            break;
++        }
++    }
++
++    fclose(fp);
++
++    return point;
++}
++
++static void foreachdir(const char *dir, int (*cb)(const char*))
++{
++    char globdir[256];
++    glob_t gl;
++    int j;
++
++    if (dir[strlen(dir) - 1] == '/')
++        snprintf(globdir, 256, "%s*", dir);
++    else
++        snprintf(globdir, 256, "%s/*", dir);
++
++    if (!glob(globdir, GLOB_NOESCAPE | GLOB_MARK | GLOB_ONLYDIR, NULL, &gl))
++        for (j = 0; j < gl.gl_pathc; j++)
++            foreachdir(gl.gl_pathv[j], cb);
++
++    cb(dir);
++}
++
++static int handle_whiteout(const char *dir)
++{
++    struct stat s;
++    char link[256];
++    ssize_t sz;
++    struct dirent **namelist;
++    int n;
++
++    n = scandir(dir, &namelist, NULL, NULL);
++
++    if (n < 1)
++        return NG;
++
++    while (n--)
++    {
++        char file[256];
++
++        snprintf(file, sizeof(file), "%s%s", dir, namelist[n]->d_name);
++        if (!lstat(file, &s) && S_ISLNK(s.st_mode))
++        {
++            sz = readlink(file, link, sizeof(link) - 1);
++            if (sz > 0)
++            {
++                char *orig;
++
++                link[sz] = '\0';
++                orig = strstr(&file[1], "/");
++                if (orig && !strcmp(link, "(overlay-whiteout)"))
++                    unlink(orig);
++            }
++        }
++        free(namelist[n]);
++    }
++    free(namelist);
++
++    return OK;
++}
++
++static int identify(char * dev)
++{
++    unsigned magic32;
++    unsigned short magic16;
++    size_t sz;
++    int fd = -1;
++    int fstype = NG; /* fs type start from 0, NG = -1. */
++
++    API();
++
++    fd = open(dev, O_RDWR | O_SYNC);
++    if (fd < 0)
++    {
++        DEBUG("open %s failed: %s", dev, strerror(errno));
++        goto __quit;
++    }
++    sz = read(fd, &magic32, sizeof(magic32));
++    if (sz != sizeof(magic32))
++    {
++        DEBUG("reading %s failed: %s", dev, strerror(errno));
++        goto __quit;
++    }
++
++    DEBUG("0x%X 0x%X 0x%X 0x%X 0x%X",
++          magic32,
++          __be32_to_cpu(magic32),
++          __be32_to_cpu(magic32) >> 16,
++          __be32_to_cpu(magic32) >> 8,
++          magic32 >> 8);
++
++    magic32 = __be32_to_cpu(magic32);
++    if (magic32 == 0xDEADC0DE)
++    {
++        DEBUG("fs is not ready - deadcode found");
++        fstype =  FS_DEADCODE;
++        goto __quit;
++    }
++
++
++    if ((magic32 >> 8) == 0x554249)
++    {
++        DEBUG("ubi volume found.");
++        fstype = FS_UBIFS;
++        goto __quit;
++    }
++
++    if (__be16_to_cpu(magic32 >> 16) == 0x1985)
++    {
++        DEBUG("jffs2 is ready.");
++        fstype = FS_JFFS2;
++        goto __quit;
++    }
++
++    /* 0x400 -> super block offset in partition
++       0x38  -> magic offset in superblock
++     */
++    lseek(fd, 0x438, SEEK_SET);
++	sz = read(fd, &magic16, sizeof(magic16));
++	if (sz != sizeof(magic16)) {
++        DEBUG("reading %s failed: %s", dev, strerror(errno));
++        goto __quit;
++	}
++
++    DEBUG("0x%X 0x%X 0x%X 0x%X",
++          magic16,
++          __be16_to_cpu(magic16),
++          __cpu_to_be16(magic16),
++          magic16 >> 8);
++
++	if (magic16 == 0xEF53) {
++        DEBUG("ext4 is ready.");
++		fstype = FS_EXT4;
++        goto __quit;
++	}
++
++    DEBUG("unable to find a supported magic number.");
++    fstype = FS_NONE;
++__quit:
++    if (fd>0) close(fd);
++    return fstype;
++}
++
++static int make_ubifs(char * dev)
++{
++    char buffer[1024];
++    API();
++    snprintf(buffer, sizeof(buffer), "ubiformat %s -y > /dev/console 2>&1", dev);
++    system(buffer);
++    DEBUG("%s,  %s!", buffer, strerror(errno));
++
++    snprintf(buffer, sizeof(buffer), "ubiattach /dev/ubi_ctrl -p %s > /dev/console 2>&1", dev);
++    system(buffer);
++    DEBUG("%s,  %s!", buffer, strerror(errno));
++
++    snprintf(buffer, sizeof(buffer), "ubimkvol /dev/ubi0 -s 64MiB -N rootfs_data > /dev/console 2>&1");
++    system(buffer);
++    DEBUG("%s,  %s!", buffer, strerror(errno));
++
++    snprintf(buffer, sizeof(buffer), "mknod /dev/ubi0 c 246 0");
++    system(buffer);
++    DEBUG("%s,  %s!", buffer, strerror(errno));
++
++    snprintf(buffer, sizeof(buffer), "mknod /dev/ubi0_0 c 246 1");
++    system(buffer);
++    DEBUG("%s,  %s!", buffer, strerror(errno));
++
++    return OK;
++}
++
++static int make_jffs2(char * dev)
++{
++    API();
++    return OK;
++}
++
++static int make_ext4(char * dev)
++{
++    char buffer[128];
++    char blkdev[128];
++    API();
++
++    if (strstr(dev, "/dev/mtd") && !strstr(dev, "mtdblock"))
++    {
++        int idx = 6;
++        sscanf(dev, "/dev/mtd%d", &idx);
++        if (idx < 5)
++        {
++            DEBUG("It's dangerous to format /dev/mtd%d, give up!", idx);
++            return NG;
++        }
++        snprintf(blkdev, sizeof(blkdev), "/dev/mtdblock%d", idx);
++        DEBUG("ext4 works on block device, %s -> %s", dev, blkdev);
++    }
++    else 
++    {
++        snprintf(blkdev, sizeof(blkdev), "%s", dev);
++    }
++
++    snprintf(buffer, sizeof(buffer), "mkfs.ext4 %s", blkdev);
++    system(buffer);
++    DEBUG("%s,  %s!", buffer, strerror(errno));
++    return OK;
++}
++
++
++static int mount_move(char *oldroot, char *newroot, char *dir)
++{
++#ifndef MS_MOVE
++#define MS_MOVE (1 << 13)
++#endif
++    struct stat s;
++    char olddir[64];
++    char newdir[64];
++    int ret;
++
++    snprintf(olddir, sizeof(olddir), "%s%s", oldroot, dir);
++    snprintf(newdir, sizeof(newdir), "%s%s", newroot, dir);
++
++    if (stat(olddir, &s) || !S_ISDIR(s.st_mode))
++        return NG;
++
++    if (stat(newdir, &s) || !S_ISDIR(s.st_mode))
++        return NG;
++
++    ret = mount(olddir, newdir, NULL, MS_NOATIME | MS_MOVE, NULL);
++
++/*
++    if (ret)
++        DEBUG("failed %s %s: %s", olddir, newdir, strerror(errno));
++*/
++    return ret;
++}
++
++static int pivot(char *new, char *old)
++{
++    char pivotdir[64];
++    int ret;
++
++    if (mount_move("", new, "/proc"))
++        return NG;
++
++    snprintf(pivotdir, sizeof(pivotdir), "%s%s", new, old);
++
++    /*  pivot_root(new,old) moves the root file system of the calling process
++        to the directory old and makes new the new root file system of the
++        calling process. */
++    ret = pivot_root(new, pivotdir);
++
++    if (ret < 0)
++    {
++        DEBUG("pivot_root failed %s %s: %s", new, pivotdir, strerror(errno));
++        return NG;
++    }
++
++    mount_move(old, "", "/dev");
++    mount_move(old, "", "/tmp");
++    mount_move(old, "", "/sys");
++    mount_move(old, "", "/overlay");
++
++    return OK;
++}
++
++
++/* this API mount overlayfs(upper=rw_root, lower=ro_root) as root. */
++static int fopivot(char *rw_root, char *ro_root)
++{
++    char overlay[64], lowerdir[64];
++
++    if (find_filesystem("overlay"))
++    {
++        DEBUG("BUG: no suitable fs found");
++        return NG;
++    }
++
++    snprintf(overlay, sizeof(overlay), "overlayfs:%s", rw_root);
++
++    /*
++     * First, try to mount without a workdir, for overlayfs v22 and before.
++     * If it fails, it means that we are probably using a v23 and
++     * later versions that require a workdir
++     */
++    snprintf(lowerdir, sizeof(lowerdir), "lowerdir=/,upperdir=%s", rw_root);
++    if (mount(overlay, "/mnt", "overlayfs", MS_NOATIME, lowerdir))
++    {
++        char upperdir[64], workdir[64], upgrade[64], upgrade_dest[64];
++        struct stat st;
++
++        snprintf(upperdir, sizeof(upperdir), "%s/upper", rw_root);
++        snprintf(workdir, sizeof(workdir), "%s/work", rw_root);
++        snprintf(upgrade, sizeof(upgrade), "%s/sysupgrade.tgz", rw_root);
++        snprintf(upgrade_dest, sizeof(upgrade_dest), "%s/sysupgrade.tgz", upperdir);
++        snprintf(lowerdir, sizeof(lowerdir), "lowerdir=/,upperdir=%s,workdir=%s",
++                 upperdir, workdir);
++
++        /*
++         * Overlay FS v23 and later requires both a upper and
++         * a work directory, both on the same filesystem, but
++         * not part of the same subtree.
++         * We can't really deal with these constraints without
++         * creating two new subdirectories in /overlay.
++         */
++        mkdir(upperdir, 0755);
++        mkdir(workdir, 0755);
++
++        if (stat(upgrade, &st) == 0)
++            rename(upgrade, upgrade_dest);
++
++        /* Mainlined overlayfs has been renamed to "overlay", try that first */
++        if (mount(overlay, "/mnt", "overlay", MS_NOATIME, lowerdir))
++        {
++            if (mount(overlay, "/mnt", "overlayfs", MS_NOATIME, lowerdir))
++            {
++                DEBUG("mount failed: %s, options %s",
++                      strerror(errno), lowerdir);
++                return NG;
++            }
++        }
++    }
++
++    return pivot("/mnt", ro_root);
++}
++
++static int ram_overlay(void)
++{
++    API();
++
++    mkdir("/tmp/root", 0755);
++    mount("tmpfs", "/tmp/root", "tmpfs", MS_NOATIME, "mode=0755");
++
++    DUMP_MOUNT();
++    fopivot("/tmp/root", "/rom");
++    DUMP_MOUNT();
++    return OK;
++}
++
++
++static int fs_overlay(int fstype, char * dev)
++{
++    char * fs = NULL;
++    char * mp = NULL;
++    int ret = NG;
++
++    API();
++
++    if (find_filesystem("overlay"))
++    {
++        DEBUG("overlayfs not enabled in kernel!");
++        return NG;
++    }
++
++    switch (fstype)
++    {
++        case FS_UBIFS:
++            WAIT_UBIDEV(10);
++            LIST_UBIDEV();
++            fs = "ubifs";
++            dev = "/dev/ubi0_0";
++            break;
++        case FS_JFFS2:
++            fs = "jffs2";
++            break;
++        case FS_EXT4:
++            fs = "ext4";
++            if (strstr(dev, "/dev/mtd") && !strstr(dev, "mtdblock"))
++            {
++                char blkdev[128];
++                int idx = 6;
++                sscanf(dev, "/dev/mtd%d", &idx);
++                if (idx < 5)
++                {
++                    DEBUG("It's dangerous to format /dev/mtd%d, give up!", idx);
++                    return NG;
++                }
++                snprintf(blkdev, sizeof(blkdev), "/dev/mtdblock%d", idx);
++                DEBUG("ext4 works on block device, %s -> %s", dev, blkdev);
++                dev = strdup(blkdev);
++                /* no need to free the strbuf, since the program exit soon. */
++            }
++            break;
++        default:
++            DEBUG("you are not supposed to be here!");
++            fs = "null";
++            break;
++    }
++
++    mp = find_mount_point(dev, 0);
++    if (mp && !strstr(mp, "/mnt"))   /* block will mount ubifs to /mnt/ubixxx*/
++    {
++        DEBUG("rootfs_data:%s is already mounted as %s\n", dev, mp);
++        return NG;
++    }
++
++    DUMP_MOUNT();
++
++    if (find_overlay_mount("overlayfs:/tmp/root"))
++    {
++        DEBUG("overlayfs:/tmp/root not found! directly overlay fs.");
++        if (mkdir("/tmp/overlay", 0755))
++        {
++            DEBUG("mkdir /tmp/overlay: %s", strerror(errno));
++        }
++
++        if (mount(dev, "/tmp/overlay", fs, MS_NOATIME, NULL))
++        {
++            DEBUG("failed(1) to mount -t %s %s /tmp/overlay: %s. let's try again.",
++                  fs, dev, strerror(errno));
++            if (mount(dev, "/tmp/overlay", fs, MS_NOATIME, NULL))
++            {
++                DEBUG("failed(2) to mount -t %s %s /tmp/overlay: %s",
++                      fs, dev, strerror(errno));
++                return NG;
++            }
++        }
++
++        DEBUG("switching to overlay");
++        if (mount_move("/tmp", "", "/overlay") || fopivot("/overlay", "/rom"))
++        {
++            return NG;
++        }
++        DUMP_MOUNT();
++#if 0
++        DEBUG("doing fo cleanup");
++        umount2("/tmp/root", MNT_DETACH);
++        foreachdir("/overlay/", handle_whiteout);
++        DUMP_MOUNT();
++#endif
++
++    }
++    else
++    {
++        DEBUG("overlayfs:/tmp/root found! switch from ram_overlay to fs_overlay.");
++        if (mkdir("/rom/overlay", 0755))
++        {
++            DEBUG("mkdir /rom/overlay: %s", strerror(errno));
++        }
++
++        ret = mount(dev, "/rom/overlay", fs, MS_NOATIME, NULL);
++        if (ret)
++        {
++            DEBUG("failed - mount -t %s %s /rom/overlay: %s", fs, dev, strerror(errno));
++            return NG;
++        }
++
++        if (mount("none", "/", NULL, MS_NOATIME | MS_REMOUNT, 0))
++        {
++            DEBUG("failed - mount -o remount,ro none: %s", strerror(errno));
++            return NG;
++        }
++
++        //system("cat /tmp/root/etc/config/system > /dev/console 2>&1");
++        //system("cat /rom/overlay/etc/config/system > /dev/console 2>&1");
++        system("cp -a /tmp/root/* /rom/overlay");
++
++        if (pivot("/rom", "/mnt"))
++        {
++            DEBUG("failed - pivot /rom /mnt: %s", strerror(errno));
++            return NG;
++        }
++
++        if (mount_move("/mnt", "/tmp/root", ""))
++        {
++            DEBUG("failed - mount -o move /mnt /tmp/root %s", strerror(errno));
++            return NG;
++        }
++        fopivot("/overlay", "/rom");
++
++        DEBUG("doing fo cleanup");
++        umount2("/tmp/root", MNT_DETACH);
++        foreachdir("/overlay/", handle_whiteout);
++    }
++
++    return OK;
++}
++
++static int stage1(int argc, char *argv[1])
++{
++    char * dev = NULL;
++    int fstype = FS_NONE;
++    char tmp[64];
++
++    API();
++
++    if (!getenv("PREINIT"))
++    {
++        DEBUG("not PREINIT, skip stage1");
++        return NG;
++    }
++
++    /* check */
++    dev = find_mtd_dev("rootfs_data");
++    if (!dev)
++    {
++        DEBUG("cannot find rootfs_data");
++        return NG;
++    }
++
++    fstype = identify(dev);
++    switch(fstype)
++    {
++        case FS_UBIFS:
++            LIST_UBIDEV();
++            snprintf(tmp, sizeof(tmp), "ubiattach /dev/ubi_ctrl -p %s", dev);
++            system(tmp);
++            DEBUG("%s,  %s!", tmp, strerror(errno));
++
++            snprintf(tmp, sizeof(tmp), "mknod /dev/ubi0 c 246 0");
++            system(tmp);
++            DEBUG("%s,  %s!", tmp, strerror(errno));
++
++            snprintf(tmp, sizeof(tmp), "mknod /dev/ubi0_0 c 246 1");
++            system(tmp);
++            DEBUG("%s,  %s!", tmp, strerror(errno));
++            LIST_UBIDEV();
++            WAIT_UBIDEV(10);
++        /* break; */
++        case FS_JFFS2:
++        /* break; */
++        case FS_EXT4:
++            #if 0
++            DEBUG("before fs_overlay, the world is like...");
++            DUMP_MOUNT();
++            system("ps w > /dev/console");
++            system("ls -l / > /dev/console");
++            system("ls -l /dev/ubi* > /dev/console");
++            #endif
++            if (OK != fs_overlay(fstype, dev))
++            {
++                DEBUG("fs_overlay failed, fallback on ram_overlay.");
++                return ram_overlay();
++            }
++            break;
++        case FS_DEADCODE:
++        /* break; */
++        case FS_NONE:
++        /* break; */
++        default:
++            DEBUG("fstype %d, go ram_overlay.", fstype);
++            return ram_overlay();
++    }
++
++    return OK;
++}
++
++
++static int stage2(int argc, char *argv[1])
++{
++    char * dev = NULL;
++    int fstype = FS_NONE;
++
++    /* check */
++    dev = find_mtd_dev("rootfs_data");
++    if (!dev)
++    {
++        DEBUG("cannot find rootfs_data");
++        return NG;
++    }
++
++    fstype = identify(dev);
++    switch(fstype)
++    {
++        case FS_UBIFS:
++        case FS_JFFS2:
++        case FS_EXT4:
++            DEBUG("job should have be done in stage1.");
++            return fs_overlay(fstype, dev);
++        case FS_DEADCODE:
++        /* break; */
++        case FS_NONE:
++        /* break; */
++        default:
++            DEBUG("no filesystem detected. create it now.");
++            if (0 == access("/proc/mt7623", R_OK))
++            {
++                if (0 == access("/proc/emmc", R_OK))
++                    make_ext4(dev);
++                else
++                    make_ubifs(dev);
++            }
++            else
++            {
++                make_jffs2(dev);
++            }
++            break;
++    }
++
++    fstype = identify(dev);
++    if (OK != fs_overlay(fstype, dev))
++    {
++        DEBUG("fs_overlay failed, fallback on ram_overlay.");
++        return ram_overlay();
++    }
++
++    return OK;
++}
++
++
++int main(int argc, char ** argv)
++{
++    DEBUG("mount_root2.");
++
++    if (argc < 2)
++    {
++        return stage1(argc, argv);
++    }
++
++    if (!strcmp(argv[1], "done"))
++        return stage2(argc, argv);
++    return NG;
++}
++
++
++
+Index: fstools-2015-02-25.1/CMakeLists.txt
+===================================================================
+--- fstools-2015-02-25.1.orig/CMakeLists.txt
++++ fstools-2015-02-25.1/CMakeLists.txt
+@@ -52,6 +52,10 @@ ADD_EXECUTABLE(mount_root mount_root.c)
+ TARGET_LINK_LIBRARIES(mount_root fstools)
+ INSTALL(TARGETS mount_root RUNTIME DESTINATION sbin)
+ 
++ADD_EXECUTABLE(mount_root2 mount_root2.c)
++TARGET_LINK_LIBRARIES(mount_root2 fstools)
++INSTALL(TARGETS mount_root2 RUNTIME DESTINATION sbin)
++
+ ADD_EXECUTABLE(block block.c)
+ IF(DEFINED CMAKE_UBIFS_EXTROOT)
+ 	ADD_DEFINITIONS(-DUBIFS_EXTROOT)

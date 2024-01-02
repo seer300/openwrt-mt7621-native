@@ -1,0 +1,14 @@
+Index: mt76x2e-3.0.4.0/rlt_wifi/common/cmm_data.c
+===================================================================
+--- mt76x2e-3.0.4.0.orig/rlt_wifi/common/cmm_data.c
++++ mt76x2e-3.0.4.0/rlt_wifi/common/cmm_data.c
+@@ -1997,8 +1997,7 @@ VOID RTMPDeQueuePacket(
+ #endif /* DBG_TX_RING_DEPTH */
+ #endif /* DBG_DIAGNOSE */
+ 
+-			if (FreeNumber[QueIdx] <= 5 ||
+-				(pAd->RalinkCounters.OneSecTxRetryOkCount + pAd->RalinkCounters.OneSecTxNoRetryOkCount) <= (TX_RING_SIZE >> 1))
++			if (FreeNumber[QueIdx] <= 5 )
+ 			{
+ 				/* free Tx(QueIdx) resources*/
+ 				RTMPFreeTXDUponTxDmaDone(pAd, QueIdx);

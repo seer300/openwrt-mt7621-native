@@ -1,0 +1,135 @@
+Index: luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+===================================================================
+--- luci.orig/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
++++ luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+@@ -141,15 +141,11 @@ st.ifname   = arg[1]
+ -- 	en.inputstyle = "reset"
+ -- end
+ 
+-radio = s:taboption("general", ListValue, "radio", translate("Radio on/off"))
+-radio:value("1",translate("on"))
+-radio:value("0",translate("off"))
+-radio.default = 1
+-
+ local hwtype = wdev:get("type")
+ local vendor = wdev:get("vendor")
+ local band = wdev:get("band")
+ local ifname = wnet:ifname()
++local netmode = wnet:mode()
+ -- NanoFoo
+ local nsantenna = wdev:get("antenna")
+ 
+@@ -164,6 +160,12 @@ for _, net in ipairs(wdev:get_wifinets()
+ 	end
+ end
+ 
++if netmode == "sta" then
++	ch = s:taboption("general", DummyValue, "choice", translate("Channel"))
++	ch.value = translatef("Locked to channel %d used by %s",
++		wnet:channel(), wnet:shortname())
++end
++
+ --if has_sta then
+ --	ch = s:taboption("general", DummyValue, "choice", translate("Channel"))
+ --	ch.value = translatef("Locked to channel %d used by %s",
+@@ -178,8 +180,13 @@ end
+ --	end
+ --end
+ ----------------- MTK Device ------------------
++if vendor == "ralink" and netmode ~= "sta" then
++
++	radio = s:taboption("general", ListValue, "radio", translate("Radio on/off"))
++	radio:value("1",translate("on"))
++	radio:value("0",translate("off"))
++	radio.default = 1
+ 
+-if vendor == "ralink" then
+ 	wifimode = s:taboption("general", ListValue, "wifimode", translate("Network Mode"))
+         wifimode:value("0", translate("802.11b/g"))
+         wifimode:value("1", translate("802.11b"))
+@@ -716,7 +723,7 @@ xessid.datatype="maxlength(32)"
+ mode = s:taboption("general", ListValue, "mode", translate("Mode"))
+ mode.override_values = true
+ mode:value("ap", translate("Access Point"))
+--- mode:value("sta", translate("Client"))
++mode:value("sta", translate("Client"))
+ -- mode:value("adhoc", translate("Ad-Hoc"))
+ 
+ bssid = s:taboption("general", Value, "bssid", translate("<abbr title=\"Basic Service Set Identifier\">BSSID</abbr>"))
+@@ -819,6 +826,7 @@ if vendor == "ralink" then
+ --	hidden = s:taboption("general", Flag, "hidden", translate("Hide <abbr title=\"Extended Service Set Identifier\">ESSID</abbr>"))
+ --	hidden:depends({mode="ap"})
+ --	hidden:depends({mode="ap-wds"})
++	if netmode == "ap" then
+ 	wmm = s:taboption("general", ListValue, "wmm", translate("WMM Mode"))
+         wmm:value("0","Disable")
+         wmm:value("1","Enable")
+@@ -827,7 +835,7 @@ if vendor == "ralink" then
+         APSD:value("0","Disable")
+         APSD:value("1","Enable")
+         APSD.default = 0
+-
++    end
+ end
+ 
+ -------------------- MAC80211 Interface ----------------------
+Index: luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi_add.lua
+===================================================================
+--- luci.orig/modules/admin-full/luasrc/model/cbi/admin_network/wifi_add.lua
++++ luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi_add.lua
+@@ -103,7 +103,9 @@ end
+ 
+ function newnet.parse(self, section)
+ 	local net, zone
++	local nixio = require("nixio")
+ 
++	nixio.syslog("err", "newnet.parse in")
+ 	if has_firewall then
+ 		local zval  = fwzone:formvalue(section)
+ 		zone = fw:get_zone(zval)
+@@ -133,6 +135,9 @@ function newnet.parse(self, section)
+ 		ssid    = m.hidden.join,
+ 		mode    = (m.hidden.mode == "Ad-Hoc" and "adhoc" or "sta")
+ 	}
++	nixio.syslog("err", "wconf.device="..tostring(wconf.device))
++	nixio.syslog("err", "wconf.ssid="..tostring(wconf.ssid))
++	nixio.syslog("err", "wconf.mode="..tostring(wconf.mode))
+ 
+ 	if m.hidden.wep == "1" then
+ 		wconf.encryption = "wep-open"
+@@ -145,17 +150,27 @@ function newnet.parse(self, section)
+ 		wconf.encryption = "none"
+ 	end
+ 
++	nixio.syslog("err", "wconf.encryption="..tostring(wconf.encryption))
++	nixio.syslog("err", "wconf.key="..tostring(wconf.key))
++	nixio.syslog("err", "wconf.key1="..tostring(wconf.key1))
++
++	wconf.ifname = wdev:get("ifname")
++	nixio.syslog("err", "wconf.key1="..tostring(wconf.key1))
++
+ 	if wconf.mode == "adhoc" or wconf.mode == "sta" then
+ 		wconf.bssid = m.hidden.bssid
+ 	end
++	nixio.syslog("err", "wconf.bssid="..tostring(wconf.bssid))
+ 
+ 	local value = self:formvalue(section)
+ 	net = nw:add_network(value, { proto = "dhcp" })
+ 
+ 	if not net then
++		nixio.syslog("err", "net missing")
+ 		self.error = { [section] = "missing" }
+ 	else
+ 		wconf.network = net:name()
++		nixio.syslog("err", "wconf.network="..wconf.network)
+ 
+ 		local wnet = wdev:add_wifinet(wconf)
+ 		if wnet then
+@@ -169,6 +184,7 @@ function newnet.parse(self, section)
+ 			uci:save("firewall")
+ 
+ 			luci.http.redirect(wnet:adminlink())
++			nixio.syslog("err", "redirect="..wnet:adminlink())
+ 		end
+ 	end
+ end

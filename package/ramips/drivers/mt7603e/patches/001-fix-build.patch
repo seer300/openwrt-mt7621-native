@@ -1,0 +1,114 @@
+Index: mt7603e-4.0.1.0/rlt_wifi_ap/Makefile
+===================================================================
+--- mt7603e-4.0.1.0.orig/rlt_wifi_ap/Makefile
++++ mt7603e-4.0.1.0/rlt_wifi_ap/Makefile
+@@ -1,7 +1,6 @@
+-EXTRA_CFLAGS = -Idrivers/net/wireless/rlt_wifi/include \
+-		-Idrivers/net/wireless/rlt_wifi/ate/include
++EXTRA_CFLAGS = -I$(src)/../rlt_wifi/include -I$(src)/../rlt_wifi/ate/include
+ 
+-DRV_NAME = rlt_wifi
++DRV_NAME = mt7603e
+ RT_WIFI_DIR = ../rlt_wifi
+ 
+ ########################################################
+@@ -733,7 +732,7 @@ endif
+ #
+ # Root 
+ #
+-obj-$(CONFIG_RLT_AP_SUPPORT) += $(DRV_NAME).o
++obj-m += $(DRV_NAME).o
+ 
+ $(DRV_NAME)-objs += $(ap_objs) $(cmm_objs) $(asic_objs) $(chip_objs) $(rate_objs) $(inf_objs)\
+                     $(spec_objs) $(func_objs) $(os_objs)
+Index: mt7603e-4.0.1.0/rlt_wifi/os/linux/rt_linux.c
+===================================================================
+--- mt7603e-4.0.1.0.orig/rlt_wifi/os/linux/rt_linux.c
++++ mt7603e-4.0.1.0/rlt_wifi/os/linux/rt_linux.c
+@@ -43,8 +43,8 @@
+ #endif
+ 
+ #if defined(CONFIG_RA_HW_NAT) || defined(CONFIG_RA_HW_NAT_MODULE)
+-#include "../../../../../../net/nat/hw_nat/ra_nat.h"
+-#include "../../../../../../net/nat/hw_nat/frame_engine.h"
++#include "../../../linux-kernel/net/nat/hw_nat/ra_nat.h"
++#include "../../../linux-kernel/net/nat/hw_nat/frame_engine.h"
+ #endif
+ 
+ /* TODO */
+Index: mt7603e-4.0.1.0/rlt_wifi/os/linux/rt_profile.c
+===================================================================
+--- mt7603e-4.0.1.0.orig/rlt_wifi/os/linux/rt_profile.c
++++ mt7603e-4.0.1.0/rlt_wifi/os/linux/rt_profile.c
+@@ -30,8 +30,8 @@
+ #endif
+ 
+ #if defined (CONFIG_RA_HW_NAT)  || defined (CONFIG_RA_HW_NAT_MODULE)
+-#include "../../../../../../net/nat/hw_nat/ra_nat.h"
+-#include "../../../../../../net/nat/hw_nat/frame_engine.h"
++#include "../../../linux-kernel/net/nat/hw_nat/ra_nat.h"
++#include "../../../linux-kernel/net/nat/hw_nat/frame_engine.h"
+ #endif
+ 
+ 
+@@ -60,8 +60,8 @@ struct dev_type_name_map{
+ #define xdef_to_str(s)   def_to_str(s) 
+ #define def_to_str(s)    #s
+ 
+-#define FIRST_EEPROM_FILE_PATH	"/etc_ro/Wireless/RT2860/"
+-#define FIRST_AP_PROFILE_PATH		"/etc/Wireless/RT2860/RT2860.dat"
++#define FIRST_EEPROM_FILE_PATH	"/etc/wireless/mt7603e/mt7603e.eeprom.dat"
++#define FIRST_AP_PROFILE_PATH		"/etc/wireless/mt7603e/mt7603e.dat"
+ #define FIRST_CHIP_ID	xdef_to_str(CONFIG_RT_FIRST_CARD)
+ 
+ #define SECOND_EEPROM_FILE_PATH	"/etc_ro/Wireless/iNIC/"
+Index: mt7603e-4.0.1.0/rlt_wifi/include/os/rt_linux.h
+===================================================================
+--- mt7603e-4.0.1.0.orig/rlt_wifi/include/os/rt_linux.h
++++ mt7603e-4.0.1.0/rlt_wifi/include/os/rt_linux.h
+@@ -152,33 +152,19 @@ typedef struct usb_ctrlrequest devctrlre
+  ***********************************************************************************/
+ #ifdef CONFIG_AP_SUPPORT
+ #ifdef RTMP_MAC_PCI
+-#if CONFIG_RTPCI_AP_RF_OFFSET == 0x48000
+-#define AP_PROFILE_PATH			"/etc/Wireless/iNIC/iNIC_ap.dat"
+-#define AP_RTMP_FIRMWARE_FILE_NAME "/etc_ro/Wireless/iNIC/RT2860AP.bin"
+-#else
+-
+-#ifdef CONFIG_FIRST_IF_MT7603E
+-//for SDK's PATH
+-#define AP_PROFILE_PATH			"/etc/Wireless/RT2860/RT2860.dat"
+-#else /* CONFIG_FIRST_IF_MT7603E */
+-//for PC's PATH
+-#define AP_PROFILE_PATH			"/etc/Wireless/RT2860AP/RT2860AP.dat"
+-#endif /* !CONFIG_FIRST_IF_MT7603E */
+-#define AP_RTMP_FIRMWARE_FILE_NAME "/etc/Wireless/RT2860AP/RT2860AP.bin"
+-
+-#endif
+ 
++#define AP_PROFILE_PATH			"/etc/wireless/mt7603e/mt7603e.dat"
+ 
+ #define AP_DRIVER_VERSION			"4.0.1.0rev1"
+ #ifdef MULTIPLE_CARD_SUPPORT
+-#define CARD_INFO_PATH			"/etc/Wireless/RT2860AP/RT2860APCard.dat"
++#define CARD_INFO_PATH			"/etc/wireless/mt7603e/mt7603e.card.dat"
+ #endif /* MULTIPLE_CARD_SUPPORT */
+ #endif /* RTMP_MAC_PCI */
+ 
+ 
+ 
+ #ifdef SINGLE_SKU_V2
+-#define SINGLE_SKU_TABLE_FILE_NAME	"/etc/Wireless/RT2860AP/SingleSKU.dat"
++#define SINGLE_SKU_TABLE_FILE_NAME	"/etc/wireless/mt7603e/SingleSKU.dat"
+ #endif /* SINGLE_SKU_V2 */
+ 
+ #endif /* CONFIG_AP_SUPPORT */
+@@ -1589,7 +1575,7 @@ extern int rausb_control_msg(VOID *dev,
+ #define ATEDBGPRINT DBGPRINT
+ #ifdef RTMP_MAC_PCI
+ #ifdef CONFIG_AP_SUPPORT
+-#define EEPROM_BIN_FILE_NAME  "/etc/Wireless/RT2860AP/e2p.bin"
++#define EEPROM_BIN_FILE_NAME  "/etc/wireless/mt7603e/mt7603e.eeprom.bin"
+ #endif /* CONFIG_AP_SUPPORT */
+ #endif /* RTMP_MAC_PCI */
+ 

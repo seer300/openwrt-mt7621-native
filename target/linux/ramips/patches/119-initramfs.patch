@@ -1,0 +1,16 @@
+Index: linux-3.10.14/scripts/gen_initramfs_list.sh
+===================================================================
+--- linux-3.10.14.orig/scripts/gen_initramfs_list.sh
++++ linux-3.10.14/scripts/gen_initramfs_list.sh
+@@ -303,8 +303,9 @@ if [ ! -z ${output_file} ]; then
+ 	if [ "${is_cpio_compressed}" = "compressed" ]; then
+ 		cat ${cpio_tfile} > ${output_file}
+ 	else
+-		(cat ${cpio_tfile} | ${compr}  - > ${output_file}) \
+-		|| (rm -f ${output_file} ; false)
++		#(cat ${cpio_tfile} | ${compr}  - > ${output_file}) \
++		#|| (rm -f ${output_file} ; false)
++		${STAGING_DIR}/../host/bin/lzma_alone e ${cpio_tfile} ${output_file} -d20
+ 	fi
+ 	[ -z ${cpio_file} ] && rm ${cpio_tfile}
+ fi

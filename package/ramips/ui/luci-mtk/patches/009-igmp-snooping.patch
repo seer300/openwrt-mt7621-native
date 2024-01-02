@@ -1,0 +1,15 @@
+Index: luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+===================================================================
+--- luci.orig/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
++++ luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+@@ -360,6 +360,10 @@ if vendor == "ralink" and netmode ~= "st
+ 	txbf:value("2",translate("Explicit TxBF"))
+ 	txbf:value("3",translate("Both"))
+ 	txbf.default=0
++        igmpsnoop = s:taboption("advanced", ListValue, "igmpsnoop", translate("IGMP Snooping"))
++        igmpsnoop:value("0",translate("Disable"))
++        igmpsnoop:value("1",translate("Enable"))
++        igmpsnoop.default=1
+ --------------------------------------------HT Physical Mode-------------------------------------------------
+ 	ht_bsscoexist = s:taboption("htmode", ListValue, "ht_bsscoexist", translate("20/40 Coexistence"))
+ 	ht_bsscoexist:depends({wifimode="7",bw="1"})

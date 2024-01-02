@@ -1,0 +1,11 @@
+#!/bin/sh /etc/rc.common
+
+
+echo "update uci config with dat file" > /tmp/dat2uci.log
+#[ -e /etc/config/wireless ] && rm /etc/config/wireless
+for dat in /etc/wireless/*/*.dat
+do
+	echo $dat
+	#dat2uci $dat >> /tmp/dat2uci.log
+done
+

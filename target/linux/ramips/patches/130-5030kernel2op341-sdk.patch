@@ -1,0 +1,279 @@
+Index: linux-3.10.14/drivers/net/raeth/raether.c
+===================================================================
+--- linux-3.10.14.orig/drivers/net/raeth/raether.c
++++ linux-3.10.14/drivers/net/raeth/raether.c
+@@ -2103,6 +2103,11 @@ static void esw_link_status_changed(int 
+ #endif
+     } else {	    
+ 	printk("ESW: Link Status Changed - Port%d Link Down\n", port_no);
++#if defined (CONFIG_WAN_AT_P4)
++	if(port_no==4) {
++	    schedule_work(&ei_local->kill_sig_wq);
++	}
++#endif
+ 
+     }
+ }
+@@ -5947,21 +5952,22 @@ void LANWANPartition(void)
+ 	mii_mgr_write(31, 0x2204, 0xff0003);//port2
+ 	mii_mgr_write(31, 0x2304, 0xff0003);//port3
+ 	mii_mgr_write(31, 0x2404, 0xff0003);//port4
++	mii_mgr_write(31, 0x2504, 0xff0003);//port5
++	mii_mgr_write(31, 0x2604, 0xff0003);//port6
+ 
+ 	/*set PVID*/
+ 	mii_mgr_write(31, 0x2014, 0x10002);//port0
+-	mii_mgr_write(31, 0x2114, 0x10001);//port1
+-	mii_mgr_write(31, 0x2214, 0x10001);//port2
+-	mii_mgr_write(31, 0x2314, 0x10001);//port3
+-	mii_mgr_write(31, 0x2414, 0x10001);//port4
+-	/*port6 */
++	mii_mgr_write(31, 0x2514, 0x10001);//port5
++
+ 	/*VLAN member*/
+ 	IsSwitchVlanTableBusy();
+-	mii_mgr_write(31, 0x94, 0x407e0001);//VAWD1
++	//mii_mgr_write(31, 0x94, 0x407e0001);//VAWD1 
++	mii_mgr_write(31, 0x94, 0x40DE0001);//VAWD1 
+ 	mii_mgr_write(31, 0x90, 0x80001001);//VTCR, VID=1
+ 	IsSwitchVlanTableBusy();
+ 
+-	mii_mgr_write(31, 0x94, 0x40610001);//VAWD1
++	//mii_mgr_write(31, 0x94, 0x40610001);//VAWD1
++	mii_mgr_write(31, 0x94, 0x40210001);//VAWD1
+ 	mii_mgr_write(31, 0x90, 0x80001002);//VTCR, VID=2
+ 	IsSwitchVlanTableBusy();
+ #endif
+@@ -5974,20 +5980,21 @@ void LANWANPartition(void)
+ 	mii_mgr_write(31, 0x2204, 0xff0003);//port2
+ 	mii_mgr_write(31, 0x2304, 0xff0003);//port3
+ 	mii_mgr_write(31, 0x2404, 0xff0003);//port4
++	mii_mgr_write(31, 0x2504, 0xff0003);//port5
++	mii_mgr_write(31, 0x2604, 0xff0003);//port6
+ 
+ 	/*set PVID*/
+-	mii_mgr_write(31, 0x2014, 0x10001);//port0
+-	mii_mgr_write(31, 0x2114, 0x10001);//port1
+-	mii_mgr_write(31, 0x2214, 0x10001);//port2
+-	mii_mgr_write(31, 0x2314, 0x10001);//port3
+ 	mii_mgr_write(31, 0x2414, 0x10002);//port4
++	mii_mgr_write(31, 0x2514, 0x10002);//port5
+ 
+ 	/*VLAN member*/
+ 	IsSwitchVlanTableBusy();
+-	mii_mgr_write(31, 0x94, 0x404f0001);//VAWD1
++	//mii_mgr_write(31, 0x94, 0x404f0001);//VAWD1
++	mii_mgr_write(31, 0x94, 0x40CF0001);//VAWD1
+ 	mii_mgr_write(31, 0x90, 0x80001001);//VTCR, VID=1
+ 	IsSwitchVlanTableBusy();
+-	mii_mgr_write(31, 0x94, 0x40500001);//VAWD1
++	//mii_mgr_write(31, 0x94, 0x40500001);//VAWD1
++	mii_mgr_write(31, 0x94, 0x40300001);//VAWD1
+ 	mii_mgr_write(31, 0x90, 0x80001002);//VTCR, VID=2
+ 	IsSwitchVlanTableBusy();
+ #endif
+Index: linux-3.10.14/drivers/net/wireless/Makefile
+===================================================================
+--- linux-3.10.14.orig/drivers/net/wireless/Makefile
++++ linux-3.10.14/drivers/net/wireless/Makefile
+@@ -72,8 +72,18 @@ else
+ obj-$(CONFIG_WIFI_PKT_FWD)       += wifi_forward/wifi_fwd/
+ endif
+ 
+-obj-y += mtk/
+-
++ifneq ($(CONFIG_RLT_AP_SUPPORT),)
++obj-$(CONFIG_RLT_AP_SUPPORT)       += rlt_wifi_ap/
++endif
++ifneq ($(CONFIG_RLT_STA_SUPPORT),)
++obj-$(CONFIG_RLT_STA_SUPPORT)      += rlt_wifi_sta/
++endif
++ifneq ($(CONFIG_MT_AP_SUPPORT),)
++obj-$(CONFIG_MT_AP_SUPPORT)       += mt_wifi_ap/
++endif
++ifneq ($(CONFIG_MT_STA_SUPPORT),)
++obj-$(CONFIG_MT_STA_SUPPORT)      += mt_wifi_sta/
++endif
+ #ifneq ($(CONFIG_WIFI_PKT_FWD),)
+ #obj-y                         += wifi_forward/wifi_hook/
+ #endif
+Index: linux-3.10.14/ralink/Kconfig
+===================================================================
+--- linux-3.10.14.orig/ralink/Kconfig
++++ linux-3.10.14/ralink/Kconfig
+@@ -61,80 +61,80 @@ choice
+ 	bool "MT7620 for rlt_wifi wifi driver"
+ 	select RTMP_MAC
+ 	select RALINK_RT6352
+-	select WIFI_MT7620 if SUPPORT_OPENWRT
+-	select MT7620_RALINK_RT6352 if SUPPORT_OPENWRT
+-	select MT7620_RTMP_MAC if SUPPORT_OPENWRT
+ 
+ 	config FIRST_IF_MT7628
+ 	bool "MT7628 for rlt_wifi wifi driver"
++	depends on RALINK_MT7628
+ 	select MT_MAC
+ 
+ 	config FIRST_IF_RT3092
+ 	bool "RT3092"
++	depends on RALINK_MT7621
+ 	select RTMP_MAC
+ 	select RALINK_RT3092
+     
+ 	config FIRST_IF_RT5392
+ 	bool "RT5392"
++	depends on RALINK_MT7621
+ 	select RTMP_MAC
+ 	select RALINK_RT5392
+     	
+ 	config FIRST_IF_RT5592
+ 	bool "RT5592"
++	depends on RALINK_MT7621
+ 	select RTMP_MAC
+ 	select RALINK_RT5592
+ 	
+ 	config FIRST_IF_RT3593
+ 	bool "RT3593"
++	depends on RALINK_MT7621
+ 	select RTMP_MAC
+ 	select RALINK_RT3593
+     
+ 	config FIRST_IF_MT7610E
+ 	bool "MT7610E"
++	depends on RALINK_MT7621
+ 	select RLT_MAC
+ 	select RALINK_MT7610E
+-	select WIFI_MT7610E if SUPPORT_OPENWRT
+     
+ 	config FIRST_IF_MT7612E
+ 	bool "MT7612E"
++	depends on RALINK_MT7621
+ 	select RLT_MAC
+ 	select RALINK_MT7612E
+-	select WIFI_MT7612E if SUPPORT_OPENWRT
+-	select MT76X2E_RALINK_MT7612E if SUPPORT_OPENWRT
+-	select MT76X2E_RLT_MAC if SUPPORT_OPENWRT
+ 
+ 	config FIRST_IF_MT7602E
+ 	bool "MT7602E"
++	depends on RALINK_MT7621
+ 	select RLT_MAC
+ 	select RALINK_MT7602E
+-	select WIFI_MT7602E if SUPPORT_OPENWRT
+-	select MT76X2E_RALINK_MT7602E if SUPPORT_OPENWRT
+-	select MT76X2E_RLT_MAC if SUPPORT_OPENWRT
+ 
+ 	config FIRST_IF_MT7603E
+ 	bool "MT7603E"
++	depends on RALINK_MT7621
+ 	select MT_MAC
+ 	select RALINK_MT7603E
+-	select WIFI_MT7603E if SUPPORT_OPENWRT
+-	select MT7603E_RALINK_MT7603E if SUPPORT_OPENWRT
+-	select MT7603E_MT_MAC if SUPPORT_OPENWRT
+ 
+ 	config FIRST_IF_MT7637E
+ 	bool "MT7637E"
++	depends on RALINK_MT7621
+ 	select WIFI_MT_MAC
+ 	select MT_MAC
+ 	select RALINK_MT7637E
+-	select WIFI_MT7637E if SUPPORT_OPENWRT
+ 
+ 	config FIRST_IF_MT7615E
+ 	bool "MT7615E"
++	depends on RALINK_MT7621
++	select WIFI_MT_MAC
++	select MT_MAC
++	select CHIP_MT7615E
++	
++	config FIRST_IF_MT7615E
++	bool "MT7615E"
++	depends on RALINK_MT7628
+ 	select WIFI_MT_MAC
+ 	select MT_MAC
+ 	select CHIP_MT7615E
+-	select WIFI_MT7615E if SUPPORT_OPENWRT
+-	select MT7615E_CHIP_MT7615E if SUPPORT_OPENWRT
+-	select MT7615E_MT_MAC if SUPPORT_OPENWRT
+-	select MT7615E_WIFI_MT_MAC if SUPPORT_OPENWRT
+ 
+ endchoice
+ 
+@@ -177,13 +177,11 @@ choice
+ 	bool "MT7610U"
+ 	select RLT_MAC
+ 	select RALINK_MT7610U
+-	select WIFI_MT7610U if SUPPORT_OPENWRT
+     
+ 	config SECOND_IF_MT7610E
+ 	bool "MT7610E"
+ 	select RLT_MAC
+ 	select RALINK_MT7610E
+-	select WIFI_MT7610E if SUPPORT_OPENWRT
+     
+ 	config SECOND_IF_RT8592
+ 	bool "RT85592"
+@@ -194,32 +192,21 @@ choice
+ 	bool "MT7612U"
+ 	select RLT_MAC
+ 	select RALINK_MT7612U
+-	select WIFI_MT7612U if SUPPORT_OPENWRT
+     
+ 	config SECOND_IF_MT7612E
+ 	bool "MT7612E"
+ 	select RLT_MAC
+ 	select RALINK_MT7612E
+-	select WIFI_MT7612E if SUPPORT_OPENWRT
+-	select MT76X2E_RALINK_MT7612E if SUPPORT_OPENWRT
+-	select MT76X2E_RLT_MAC if SUPPORT_OPENWRT
+ 
+ 	config SECOND_IF_MT7602E
+ 	bool "MT7602E"
+ 	select RLT_MAC
+ 	select RALINK_MT7602E
+-	select WIFI_MT7602E if SUPPORT_OPENWRT
+-	select MT76X2E_RALINK_MT7602E if SUPPORT_OPENWRT
+-	select MT76X2E_RLT_MAC if SUPPORT_OPENWRT
+ 
+ 	config SECOND_IF_MT7603E
+ 	bool "MT7603E"
+ 	select MT_MAC
+ 	select RALINK_MT7603E
+-	select WIFI_MT7603E if SUPPORT_OPENWRT
+-	select MT7603E_RALINK_MT7603E if SUPPORT_OPENWRT
+-	select MT7603E_MT_MAC if SUPPORT_OPENWRT
+-
+ 
+ 	config SECOND_IF_MT7637E
+ 	bool "MT7637E"
+@@ -231,10 +218,6 @@ choice
+ 	bool "MT7615E"
+ 	select WIFI_MT_MAC
+ 	select CHIP_MT7615E
+-	select WIFI_MT7615E if SUPPORT_OPENWRT
+-	select MT7615E_CHIP_MT7615E if SUPPORT_OPENWRT
+-	select MT7615E_MT_MAC if SUPPORT_OPENWRT
+-	select MT7615E_WIFI_MT_MAC if SUPPORT_OPENWRT
+ endchoice
+ 
+ choice
+@@ -247,10 +230,6 @@ choice
+ 	select WIFI_MT_MAC
+ 	select MT_MAC
+ 	select CHIP_MT7615E
+-	select WIFI_MT7615E if SUPPORT_OPENWRT
+-	select MT7615E_CHIP_MT7615E if SUPPORT_OPENWRT
+-	select MT7615E_MT_MAC if SUPPORT_OPENWRT
+-	select MT7615E_WIFI_MT_MAC if SUPPORT_OPENWRT
+ endchoice
+ 
+ config  RT_FIRST_CARD
+@@ -383,7 +362,6 @@ choice
+ endchoice
+ 
+     
+-source "drivers/net/wireless/mtk/Kconfig"
+ #source "drivers/net/wireless/rt2860v2_ap/Kconfig"
+ #source "drivers/net/wireless/rt2860v2_sta/Kconfig"
+ #source "drivers/net/wireless/RTPCI_ap/Kconfig"

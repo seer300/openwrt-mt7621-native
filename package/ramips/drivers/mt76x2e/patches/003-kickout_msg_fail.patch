@@ -1,0 +1,55 @@
+Index: mt76x2e-3.0.4.0/rlt_wifi/ap/ap.c
+===================================================================
+--- mt76x2e-3.0.4.0.orig/rlt_wifi/ap/ap.c
++++ mt76x2e-3.0.4.0/rlt_wifi/ap/ap.c
+@@ -707,7 +707,8 @@ DBGPRINT(RT_DEBUG_OFF, ("%s(): AP Set Ce
+ 
+ #ifdef RTMP_MAC_PCI
+ 	//enable IRQ after init ready
+-	RTMP_IRQ_ENABLE(pAd);
++	//RTMP_IRQ_ENABLE(pAd);
++	RTMP_MAC_RX_ENABLE(pAd);
+ #endif /*RTMP_MAC_PCI*/
+ 
+ #ifdef WAPI_SUPPORT
+@@ -817,7 +818,8 @@ VOID APStop(
+ 
+ #ifdef RTMP_MAC_PCI
+ 	//disable IRQ before init ready
+-	RTMP_ASIC_INTERRUPT_DISABLE(pAd);
++	//RTMP_ASIC_INTERRUPT_DISABLE(pAd);
++	RTMP_MAC_RX_DISABLE(pAd);
+ #endif /*RTMP_MAC_PCI*/
+ 	MacTableReset(pAd);
+ 
+Index: mt76x2e-3.0.4.0/rlt_wifi/include/mac_ral/mac_pci.h
+===================================================================
+--- mt76x2e-3.0.4.0.orig/rlt_wifi/include/mac_ral/mac_pci.h
++++ mt76x2e-3.0.4.0/rlt_wifi/include/mac_ral/mac_pci.h
+@@ -319,6 +319,26 @@ typedef enum _RTMP_TX_DONE_MASK{
+ 	} while(0)
+ 
+ 
++	/* Disable MAC RX */
++#define RTMP_MAC_RX_DISABLE(pAd)	\
++			do{ 			\
++					UINT32 value;	\
++					RTMP_IO_READ32(pAd, MAC_SYS_CTRL, &value);	\
++					value &= ~(1<<3);	\
++					RTMP_IO_WRITE32(pAd, MAC_SYS_CTRL, value);	\
++			} while(0)
++			
++	
++	/* Enable MAC RX */
++#define RTMP_MAC_RX_ENABLE(pAd)	\
++			do{ 			\
++					UINT32 value;	\
++					RTMP_IO_READ32(pAd, MAC_SYS_CTRL, &value);	\
++					value |= (1<<3);	\
++					RTMP_IO_WRITE32(pAd, MAC_SYS_CTRL, value);	\
++			} while(0)
++
++
+ 
+ /* ----------------- MLME Related MACRO ----------------- */
+ // TODO: shiang-usw, need to verify this to make sure that's solid enough!

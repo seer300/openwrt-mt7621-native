@@ -1,0 +1,160 @@
+Index: linux-3.10.20/drivers/misc/mediatek/nand/mt7623/mtk_nand.c
+===================================================================
+--- linux-3.10.20.orig/drivers/misc/mediatek/nand/mt7623/mtk_nand.c
++++ linux-3.10.20/drivers/misc/mediatek/nand/mt7623/mtk_nand.c
+@@ -1066,7 +1066,13 @@ u32 mtk_nand_page_transform(struct mtd_i
+            (devinfo.feature_set.ptbl_idx != PPTBL_NOT_SUPPORT))
+ 		{
+ 			//page_in_block = devinfo.feature_set.PairPage[page_in_block];
+-			page_in_block = functArray[devinfo.feature_set.ptbl_idx](page_in_block);
++			if (devinfo.feature_set.ptbl_idx < 3) {
++				page_in_block = functArray[devinfo.feature_set.ptbl_idx](page_in_block);
++			} else {
++				printk("<trace> devinfo.feature_set.ptbl_idx = %d, array idx overflow! L%d, %s\n",
++					devinfo.feature_set.ptbl_idx, __LINE__, __FUNCTION__);
++			}
++
+ 		}
+ 		
+ 	    mapped_block = get_mapping_block_index(block);
+@@ -6586,11 +6592,11 @@ static int mtk_nand_probe(struct platfor
+         printk("Thanks to GOD, UNIT Test OK!\n");
+     }
+ #endif
+-#ifdef PMT
++#if 0 //PMT
+     part_init_pmt(mtd, (u8 *) & g_exist_Partition[0]);
+     err = mtd_device_register(mtd, g_exist_Partition, part_num);
+ #else
+-    err = mtd_device_register(mtd, g_pasStatic_Partition, part_num);
++    err = mtd_device_register(mtd, g_pasStatic_Partition, 6);
+ #endif
+ 
+ #ifdef _MTK_NAND_DUMMY_DRIVER_
+Index: linux-3.10.20/drivers/misc/mediatek/nand/mt7623/partition_mt.c
+===================================================================
+--- linux-3.10.20.orig/drivers/misc/mediatek/nand/mt7623/partition_mt.c
++++ linux-3.10.20/drivers/misc/mediatek/nand/mt7623/partition_mt.c
+@@ -58,7 +58,35 @@ unsigned long long  partition_type_array
+ pt_resident new_part[PART_MAX_COUNT];
+ pt_resident lastest_part[PART_MAX_COUNT];
+ unsigned char part_name[PART_MAX_COUNT][MAX_PARTITION_NAME_LEN];
+-struct mtd_partition g_pasStatic_Partition[PART_MAX_COUNT];
++struct mtd_partition g_pasStatic_Partition[PART_MAX_COUNT] = {
++     {
++            name:           "ALL",
++            size:           MTDPART_SIZ_FULL,
++            offset:         0,
++     },
++    /* Put your own partition definitions here */
++     {
++            name:           "Preloader",
++            size:           0x40000,
++            offset:         0,
++     }, {
++            name:           "Uboot",
++            size:           0x80000,
++            offset:         MTDPART_OFS_APPEND
++     }, {
++            name:           "Config",
++            size:           0x40000,
++            offset:         MTDPART_OFS_APPEND
++     }, {
++            name:           "Factory",
++            size:           0x40000,
++            offset:         MTDPART_OFS_APPEND
++     }, {
++            name:           "firmware",
++            size:           MTDPART_SIZ_FULL,
++            offset:         MTDPART_OFS_APPEND
++     }
++};
+ //int part_num;
+ //struct excel_info PartInfo[PART_MAX_COUNT];
+ #define MTD_SECFG_STR "seccnfg"
+@@ -505,6 +533,7 @@ void construct_mtd_partition(struct mtd_
+ 
+ 	if (PartInfo==NULL)
+ 	{
++		printk("<trace> L%d, %s\n", __LINE__, __FUNCTION__);
+ 		PartInfo = kzalloc(PART_NUM * sizeof(struct excel_info), GFP_KERNEL);
+ 		if (!PartInfo) {
+ 			printk("%s: malloc PartInfo fail\n",__FILE__);
+@@ -512,6 +541,7 @@ void construct_mtd_partition(struct mtd_
+ 		}
+ 		memcpy(PartInfo, PartInfo_Private, PART_NUM * sizeof(struct excel_info));
+ 	}	
++	printk("<trace> L%d, %s\n", __LINE__, __FUNCTION__);
+ 	for(i = 0; i < PART_MAX_COUNT; i++)
+ 	{
+ 		if(lastest_part[i].size == 0)
+Index: linux-3.10.20/drivers/mtd/mtdpart.c
+===================================================================
+--- linux-3.10.20.orig/drivers/mtd/mtdpart.c
++++ linux-3.10.20/drivers/mtd/mtdpart.c
+@@ -887,6 +887,7 @@ static void split_rootfs_data(struct mtd
+ 	unsigned int split_size;
+ 	int ret;
+ 
++	//printk("<trace> %d, %s\n", __LINE__, __FUNCTION__);
+ 	ret = run_parsers_by_type(part, MTD_PARSER_TYPE_ROOTFS);
+ 	if (ret > 0)
+ 		return;
+@@ -920,6 +921,7 @@ static void split_uimage(struct mtd_info
+ 	} hdr;
+ 	size_t len;
+ 
++	//printk("<trace> %d, %s\n", __LINE__, __FUNCTION__);
+ 	if (mtd_read(master, part->offset, sizeof(hdr), &len, (void *) &hdr))
+ 		return;
+ 
+@@ -944,6 +946,7 @@ static void split_uimage(struct mtd_info
+ static void split_firmware(struct mtd_info *master, struct mtd_part *part)
+ {
+ 	int ret;
++	//printk("<trace> %d, %s\n", __LINE__, __FUNCTION__);
+ 
+ 	ret = run_parsers_by_type(part, MTD_PARSER_TYPE_FIRMWARE);
+ 	if (ret > 0)
+@@ -962,10 +965,14 @@ static void mtd_partition_split(struct m
+ {
+ 	static int rootfs_found = 0;
+ 
+-	if (rootfs_found)
++	//printk("<trace> %d, %s, %s\n", __LINE__, __FUNCTION__, part->mtd.name);
++	if (rootfs_found) {
++		//printk("<trace> %d, %s, %s\n", __LINE__, __FUNCTION__, part->mtd.name);
+ 		return;
++	}
+ 
+ 	if (!strcmp(part->mtd.name, "rootfs")) {
++		//printk("<trace> %d, %s\n", __LINE__, __FUNCTION__);
+ 		rootfs_found = 1;
+ 
+ 		if (config_enabled(CONFIG_MTD_ROOTFS_SPLIT))
+@@ -973,9 +980,12 @@ static void mtd_partition_split(struct m
+ 	}
+ 
+ 	if (!strcmp(part->mtd.name, SPLIT_FIRMWARE_NAME) &&
+-	    config_enabled(CONFIG_MTD_SPLIT_FIRMWARE))
++	    config_enabled(CONFIG_MTD_SPLIT_FIRMWARE)) {
++		//printk("<trace> %d, %s\n", __LINE__, __FUNCTION__);
+ 		split_firmware(master, part);
++	}
+ 
++	//printk("<trace> %d, %s\n", __LINE__, __FUNCTION__);
+ 	arch_split_mtd_part(master, part->mtd.name, part->offset,
+ 			    part->mtd.size);
+ }
+@@ -1002,8 +1012,10 @@ int add_mtd_partitions(struct mtd_info *
+ 
+ 	for (i = 0; i < nbparts; i++) {
+ 		slave = allocate_partition(master, parts + i, i, cur_offset);
+-		if (IS_ERR(slave))
++		if (IS_ERR(slave)) {
++			//printk("<trace> %d, %s\n", __LINE__, __FUNCTION__);
+ 			return PTR_ERR(slave);
++		}
+ 
+ 		mutex_lock(&mtd_partitions_mutex);
+ 		list_add(&slave->list, &mtd_partitions);

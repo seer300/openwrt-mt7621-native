@@ -1,0 +1,25 @@
+Index: linux-3.10.20/net/netfilter/nf_shortcut.c
+===================================================================
+--- linux-3.10.20.orig/net/netfilter/nf_shortcut.c
++++ linux-3.10.20/net/netfilter/nf_shortcut.c
+@@ -125,9 +125,9 @@ int __init mtk_smb_hook_init(void)
+ 	struct in_ifaddr *ifa = NULL;
+ 
+ #if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35)
+-	lan_int = dev_get_by_name_rcu(&init_net, "br0");
++	lan_int = dev_get_by_name_rcu(&init_net, "br-lan");
+ #else
+-	lan_int = __dev_get_by_name("br0");
++	lan_int = __dev_get_by_name("br-lan");
+ #endif
+ 	if (lan_int)
+ 		in_dev = __in_dev_get_rtnl(lan_int);
+@@ -137,7 +137,7 @@ int __init mtk_smb_hook_init(void)
+ 	if (in_dev) {
+ 		for (ifap = &in_dev->ifa_list; (ifa = *ifap) != NULL;
+ 		     ifap = &ifa->ifa_next) {
+-			if (!strcmp("br0", ifa->ifa_label))
++			if (!strcmp("br-lan", ifa->ifa_label))
+ 			{
+ 				lan_ifa = ifa;
+ 				break; /* found */

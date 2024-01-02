@@ -1,0 +1,21 @@
+Index: linux-3.10.14/fs/Kconfig
+===================================================================
+--- linux-3.10.14.orig/fs/Kconfig
++++ linux-3.10.14/fs/Kconfig
+@@ -186,7 +186,6 @@ menuconfig MISC_FILESYSTEMS
+ 
+ if MISC_FILESYSTEMS
+ 
+-source "fs/ufsd/Kconfig"
+ source "fs/adfs/Kconfig"
+ source "fs/affs/Kconfig"
+ source "fs/ecryptfs/Kconfig"
+Index: linux-3.10.14/fs/Makefile
+===================================================================
+--- linux-3.10.14.orig/fs/Makefile
++++ linux-3.10.14/fs/Makefile
+@@ -129,4 +129,3 @@ obj-$(CONFIG_CEPH_FS)		+= ceph/
+ obj-$(CONFIG_PSTORE)		+= pstore/
+ obj-$(CONFIG_EFIVAR_FS)		+= efivarfs/
+ obj-$(CONFIG_AUFS_FS)           += aufs/
+-obj-$(CONFIG_UFSD_FS)           += ufsd/

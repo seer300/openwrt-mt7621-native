@@ -1,0 +1,30 @@
+Index: mt76x2e-3.0.4.0/rlt_wifi_ap/Makefile
+===================================================================
+--- mt76x2e-3.0.4.0.orig/rlt_wifi_ap/Makefile
++++ mt76x2e-3.0.4.0/rlt_wifi_ap/Makefile
+@@ -1,12 +1,6 @@
+-ifeq ($(CONFIG_SUPPORT_OPENWRT),y)
+-EXTRA_CFLAGS = -I$(src)/../src/include -I$(src)/../src/ate/include
++EXTRA_CFLAGS = -I$(src)/../rlt_wifi/include -I$(src)/../rlt_wifi/ate/include
+ DRV_NAME = mt76x2e
+-RT_WIFI_DIR = ../src
+-else
+-EXTRA_CFLAGS = -Idrivers/net/wireless/rlt_wifi/include -Idrivers/net/wireless/rlt_wifi/ate/include
+-DRV_NAME = rlt_wifi
+ RT_WIFI_DIR = ../rlt_wifi
+-endif
+ 
+ ########################################################
+ # Common files
+@@ -649,11 +643,7 @@ endif
+ #
+ # Root 
+ #
+-ifeq ($(CONFIG_SUPPORT_OPENWRT),y)
+ obj-m += $(DRV_NAME).o
+-else
+-obj-$(CONFIG_RLT_AP_SUPPORT) += $(DRV_NAME).o
+-endif
+ 
+ $(DRV_NAME)-objs += $(cmm_objs) $(asic_objs) $(chip_objs) $(rate_objs)\
+                     $(spec_objs) $(func_objs) $(ap_objs) $(os_objs)

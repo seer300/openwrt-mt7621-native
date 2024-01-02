@@ -1,0 +1,76 @@
+diff -Nur linux-3.10.14-orig/drivers/net/wireless/wifi_forward/wifi_fwd/wifi_fwd.c linux-3.10.14/drivers/net/wireless/wifi_forward/wifi_fwd/wifi_fwd.c
+--- linux-3.10.14-orig/drivers/net/wireless/wifi_forward/wifi_fwd/wifi_fwd.c	2017-04-07 11:55:09.000000000 +0800
++++ linux-3.10.14/drivers/net/wireless/wifi_forward/wifi_fwd/wifi_fwd.c	2017-04-10 14:45:20.898046962 +0800
+@@ -295,7 +295,7 @@
+ 
+ static void dump_bridge_by_name(void)
+ {
+-	br0 = ra_dev_get_by_name("br0");
++	br0 = ra_dev_get_by_name("br-lan");
+ }
+ 
+ static void wifi_fwd_reset_link_count(void)
+@@ -2548,6 +2548,12 @@
+ 	unsigned int recv_from = 0, band_from = 0, ret = 0;
+ 	int idx = 0;
+ 
++	if (mh == NULL ||skb == NULL)
++	{
++		printk("%s:mh=%p,skb=%p \n",__FUNCTION__,mh,skb);
++		return 1;
++	}
++
+ 	net_dev = skb->dev;
+ 	recv_from = WIFI_FWD_GET_PACKET_RECV_FROM(skb, recv_from_cb_offset);
+ 	band_from = WIFI_FWD_GET_PACKET_BAND(skb, band_cb_offset);
+@@ -2585,6 +2591,12 @@
+ 	}
+ 	
+ 	/* forward the packet to bridge no matter unicast or broadcast */
++	if (mh->h_dest == NULL ||br0->dev_addr == NULL)
++	{
++		printk("%s mh->h_dest = %p,br0->dev_addr = %p\n",__FUNCTION__,mh->h_dest,br0->dev_addr);
++		return 1;
++	}
++
+ 	if ((br0->dev_addr != NULL) && MAC_ADDR_EQUAL(mh->h_dest, br0->dev_addr))
+ 		return 1;
+ 
+diff -Nur linux-3.10.14-orig/drivers/net/wireless/wifi_forward/wifi_fwd_v1/wifi_fwd.c linux-3.10.14/drivers/net/wireless/wifi_forward/wifi_fwd_v1/wifi_fwd.c
+--- linux-3.10.14-orig/drivers/net/wireless/wifi_forward/wifi_fwd_v1/wifi_fwd.c	2017-04-07 11:55:09.000000000 +0800
++++ linux-3.10.14/drivers/net/wireless/wifi_forward/wifi_fwd_v1/wifi_fwd.c	2017-04-10 14:45:36.464479582 +0800
+@@ -204,7 +204,7 @@
+ 	ap1_5g = ra_dev_get_by_name("rai1");
+ 	apcli1_5g = ra_dev_get_by_name("apclii1");
+ 
+-	br0 = ra_dev_get_by_name("br0");
++	br0 = ra_dev_get_by_name("br-lan");
+ 
+ 	dbg_print("[dump]ap_2g=0x%08X, apcli_2g=0x%08X, ap_5g=0x%08X, apcli_5g=0x%08X, br0=0x%08X\n",
+ 		(int)ap_2g, (int)apcli_2g, (int)ap_5g, (int)apcli_5g, (int)br0);
+@@ -1991,7 +1991,12 @@
+ 	struct net_device *net_dev = NULL;
+ 	struct net_device *target = NULL;
+ 	struct ethhdr *mh = eth_hdr(skb);
+-	
++
++	if (mh == NULL ||skb == NULL)
++	{
++		printk("%s:mh=%p,skb=%p \n",__FUNCTION__,mh,skb);
++		return 1;
++	}	
+ 	unsigned char type = ENTRY_TYPE_INVALID;
+ 	net_dev = skb->dev;
+ 
+@@ -2026,6 +2031,11 @@
+ 	}
+ 	
+ 	/* handle packets from bridge no matter unicast or broadcast */
++	if (mh->h_dest == NULL ||br0->dev_addr == NULL)
++	{
++		printk("%s mh->h_dest = %p,br0->dev_addr = %p\n",__FUNCTION__,mh->h_dest,br0->dev_addr);
++		return 1;
++	}
+ 	if (MAC_ADDR_EQUAL(mh->h_dest, br0->dev_addr))
+ 		return 1;
+ 

@@ -1,0 +1,17 @@
+Index: luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+===================================================================
+--- luci.orig/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
++++ luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+@@ -354,6 +354,12 @@ if vendor == "ralink" and netmode ~= "st
+         IEEE80211H:value("0",translate("Disable"))
+         IEEE80211H:value("1",translate("Enable"))
+ 	IEEE80211H.default = 1
++        txbf = s:taboption("advanced", ListValue, "txbf", translate("Tx Beamforming"))
++        txbf:value("0",translate("Disable"))
++	txbf:value("1",translate("Implicit TxBF"))
++	txbf:value("2",translate("Explicit TxBF"))
++	txbf:value("3",translate("Both"))
++	txbf.default=0
+ --------------------------------------------HT Physical Mode-------------------------------------------------
+ 	ht_bsscoexist = s:taboption("htmode", ListValue, "ht_bsscoexist", translate("20/40 Coexistence"))
+ 	ht_bsscoexist:depends({wifimode="7",bw="1"})

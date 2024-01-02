@@ -1,0 +1,30 @@
+Index: luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+===================================================================
+--- luci.orig/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
++++ luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+@@ -198,14 +198,14 @@ if vendor == "ralink" and netmode ~= "st
+         wifimode:value("9", translate("802.11b/g/n"))
+         wifimode:value("14", translate("802.11a/an/ac"))
+ 	wifimode:value("15", translate("802.11an/ac"))
+-       	if band == "5G" then
++       	if band == "5G" or band == "5g" then
+ 	wifimode.default = 14
+ 	else
+ 	wifimode.default = 9
+ 	end
+ 	ch = s:taboption("general", ListValue, "channel", translate("Channel"))
+ 	ch:value("0","auto")
+-	if band == "5G" then
++	if band == "5G" or band == "5g" then
+ 	ch:value("36","5.180 GHz (Channel 36)",{aregion="0"},{aregion="1"},{aregion="2"},{aregion="6"},{aregion="7"},{aregion="9"},{aregion="10"},{aregion="11"})
+         ch:value("40","5.200 GHz (Channel 40)",{aregion="0"},{aregion="1"},{aregion="2"},{aregion="6"},{aregion="7"},{aregion="9"},{aregion="10"},{aregion="11"})
+         ch:value("44","5.220 GHz (Channel 44)",{aregion="0"},{aregion="1"},{aregion="2"},{aregion="6"},{aregion="7"},{aregion="9"},{aregion="10"},{aregion="11"})
+@@ -250,7 +250,7 @@ if vendor == "ralink" and netmode ~= "st
+ 
+ 	bw:value("0", translate("20MHz"))
+ 	bw:value("1", translate("40MHz"), {channel="0"}, {channel="36"}, {channel="40"}, {channel="44"}, {channel="48"}, {channel="52"}, {channel="56"}, {channel="60"}, {channel="64"}, {channel="100"}, {channel="104"}, {channel="108"}, {channel="112"}, {channel="116"}, {channel="120"}, {channel="124"}, {channel="128"}, {channel="132"}, {channel="136"}, {channel="140"}, {channel="149"}, {channel="153"}, {channel="157"}, {channel="161"}, {channel="1"}, {channel="2"}, {channel="3"}, {channel="4"}, {channel="5"}, {channel="6"}, {channel="7"}, {channel="8"}, {channel="9"}, {channel="10"}, {channel="11"}, {channel="12"}, {channel="13"}, {channel="14"})
+-	if band == "5G" then
++	if band == "5G" or band == "5g" then
+        		bw:value("2", translate("80MHz"), {channel="0"}, {channel="36"}, {channel="40"}, {channel="44"}, {channel="48"}, {channel="52"}, {channel="56"}, {channel="60"}, {channel="64"}, {channel="100"}, {channel="104"}, {channel="108"}, {channel="112"}, {channel="116"}, {channel="120"}, {channel="124"}, {channel="128"}, {channel="132"}, {channel="136"}, {channel="140"}, {channel="149"}, {channel="153"}, {channel="157"}, {channel="161"}, {channel="1"}, {channel="2"}, {channel="3"}, {channel="4"}, {channel="5"}, {channel="6"}, {channel="7"}, {channel="8"}, {channel="9"}, {channel="10"}, {channel="11"}, {channel="12"}, {channel="13"}, {channel="14"})
+ 	        bw:value("3", translate("160MHz"), {channel="0"}, {channel="36"}, {channel="40"}, {channel="44"}, {channel="48"}, {channel="52"}, {channel="56"}, {channel="60"}, {channel="64"}, {channel="100"}, {channel="104"}, {channel="108"}, {channel="112"}, {channel="116"}, {channel="120"}, {channel="124"}, {channel="128"}, {channel="132"}, {channel="136"}, {channel="140"}, {channel="149"}, {channel="153"}, {channel="157"}, {channel="161"}, {channel="1"}, {channel="2"}, {channel="3"}, {channel="4"}, {channel="5"}, {channel="6"}, {channel="7"}, {channel="8"}, {channel="9"}, {channel="10"}, {channel="11"}, {channel="12"}, {channel="13"}, {channel="14"})
+ 		bw:value("4", translate("80+80MHz"), {channel="0"}, {channel="36"}, {channel="40"}, {channel="44"}, {channel="48"}, {channel="52"}, {channel="56"}, {channel="60"}, {channel="64"}, {channel="100"}, {channel="104"}, {channel="108"}, {channel="112"}, {channel="116"}, {channel="120"}, {channel="124"}, {channel="128"}, {channel="132"}, {channel="136"}, {channel="140"}, {channel="149"}, {channel="153"}, {channel="157"}, {channel="161"}, {channel="1"}, {channel="2"}, {channel="3"}, {channel="4"}, {channel="5"}, {channel="6"}, {channel="7"}, {channel="8"}, {channel="9"}, {channel="10"}, {channel="11"}, {channel="12"}, {channel="13"}, {channel="14"})	

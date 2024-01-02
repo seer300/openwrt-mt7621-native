@@ -1,0 +1,13 @@
+Index: linux-3.10.14/drivers/mmc/host/mtk-mmc/sd.c
+===================================================================
+--- linux-3.10.14.orig/drivers/mmc/host/mtk-mmc/sd.c
++++ linux-3.10.14/drivers/mmc/host/mtk-mmc/sd.c
+@@ -2999,7 +2999,7 @@ static int __init mt_msdc_init(void)
+     reg1 = sdr_read32((volatile u32*)(RALINK_SYSCTL_BASE + 0x1360)) & ~(0x1<<26);
+     sdr_write32((volatile u32*)(RALINK_SYSCTL_BASE + 0x1360), reg1);
+ #else  
+-    reg = sdr_read32((volatile u32*)(RALINK_SYSCTL_BASE + 0x60)) & ~(0x3<<0) & ~(0x3<<6) & ~(0x3<<10) & ~(0x1<<15) & ~(0x3<<20) & ~(0x3<<24) | (0x1<<0) | (0x1<<6) | (0x1<<10) | (0x1<<15) | (0x1<<20) | (0x1<<24);
++    reg = (sdr_read32((volatile u32*)(RALINK_SYSCTL_BASE + 0x60)) & (~(0x3<<0)) & (~(0x3<<6)) & (~(0x3<<10)) & (~(0x1<<15)) & (~(0x3<<20)) & (~(0x3<<24))) | (0x1<<0) | (0x1<<6) | (0x1<<10) | (0x1<<15) | (0x1<<20) | (0x1<<24);
+    // reg = 0x55158448;
+    
+     reg1 = sdr_read32((volatile u32*)(RALINK_SYSCTL_BASE + 0x1340)) | (0x1<<11); //Normal mode(AP mode) , SDXC CLK=PAD_GPIO0=GPIO11, driving = 8mA

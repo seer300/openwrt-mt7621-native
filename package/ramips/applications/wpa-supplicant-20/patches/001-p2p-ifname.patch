@@ -1,0 +1,24 @@
+Index: wpa-supplicant-20/wpa_supplicant-2.0/wpa_supplicant/p2p_supplicant.c
+===================================================================
+--- wpa-supplicant-20.orig/wpa_supplicant-2.0/wpa_supplicant/p2p_supplicant.c
++++ wpa-supplicant-20/wpa_supplicant-2.0/wpa_supplicant/p2p_supplicant.c
+@@ -951,7 +951,7 @@ static int wpas_p2p_add_group_interface(
+ 					enum wpa_driver_if_type type)
+ {
+ 	char ifname[120], force_ifname[120];
+-
++#if 0
+ 	if (wpa_s->pending_interface_name[0]) {
+ 		wpa_printf(MSG_DEBUG, "P2P: Pending virtual interface exists "
+ 			   "- skip creation of a new one");
+@@ -972,6 +972,10 @@ static int wpas_p2p_add_group_interface(
+ 		os_snprintf(ifname, sizeof(ifname), "p2p-%d",
+ 			    wpa_s->p2p_group_idx);
+ 	}
++#endif
++	os_memset(ifname, 0, sizeof(ifname));
++	strcpy(ifname, "p2p9");
++
+ 	force_ifname[0] = '\0';
+ 
+ 	wpa_printf(MSG_DEBUG, "P2P: Create a new interface %s for the group",

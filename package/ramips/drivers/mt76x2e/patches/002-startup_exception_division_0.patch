@@ -1,0 +1,13 @@
+Index: mt76x2e-3.0.4.0/rlt_wifi/common/cmm_info.c
+===================================================================
+--- mt76x2e-3.0.4.0.orig/rlt_wifi/common/cmm_info.c
++++ mt76x2e-3.0.4.0/rlt_wifi/common/cmm_info.c
+@@ -2131,7 +2131,7 @@ VOID RTMPSetPhyMode(RTMP_ADAPTER *pAd, U
+ 	{
+ #ifdef CONFIG_AP_SUPPORT
+ 		IF_DEV_CONFIG_OPMODE_ON_AP(pAd)
+-		if (pAd->CommonCfg.Channel != 0)
++		//if (pAd->CommonCfg.Channel != 0)
+ 				pAd->CommonCfg.Channel = FirstChannel(pAd);
+ #endif /* CONFIG_AP_SUPPORT */
+ #ifdef CONFIG_STA_SUPPORT

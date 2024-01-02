@@ -1,0 +1,25 @@
+Index: linux-3.10.20/drivers/net/wireless/wifi_forward/wifi_fwd/wifi_fwd.c
+===================================================================
+--- linux-3.10.20.orig/drivers/net/wireless/wifi_forward/wifi_fwd/wifi_fwd.c
++++ linux-3.10.20/drivers/net/wireless/wifi_forward/wifi_fwd/wifi_fwd.c
+@@ -2473,6 +2473,9 @@ static int wifi_fwd_rx_handler(struct sk
+ 	unsigned int recv_from = 0, band_from = 0, ret = 0;
+ 	int idx = 0;
+ 
++	if (mh == NULL || skb == NULL) {
++		return 1;
++	}
+ 	net_dev = skb->dev;
+ 	recv_from = WIFI_FWD_GET_PACKET_RECV_FROM(skb, recv_from_cb_offset);
+ 	band_from = WIFI_FWD_GET_PACKET_BAND(skb, band_cb_offset);
+@@ -2506,6 +2509,10 @@ static int wifi_fwd_rx_handler(struct sk
+ 				return 2;
+ 		}
+ 	}
++
++	if (mh->h_dest == NULL || br_lan->dev_addr == NULL) {
++		return 1;
++	}
+ 	
+ 	/* forward the packet to bridge no matter unicast or broadcast */
+ 	if (MAC_ADDR_EQUAL(mh->h_dest, br_lan->dev_addr))

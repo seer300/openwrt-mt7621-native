@@ -1,0 +1,266 @@
+Index: linux-3.10.20/drivers/mtd/devices/block2mtd.c
+===================================================================
+--- linux-3.10.20.orig/drivers/mtd/devices/block2mtd.c
++++ linux-3.10.20/drivers/mtd/devices/block2mtd.c
+@@ -7,6 +7,7 @@
+  * Licence: GPL
+  */
+ #include <linux/module.h>
++#include <linux/delay.h>
+ #include <linux/fs.h>
+ #include <linux/blkdev.h>
+ #include <linux/bio.h>
+@@ -32,10 +33,18 @@ struct block2mtd_dev {
+ };
+ 
+ 
++/* the mtd parsers we want to use */
++static const char * const block2mtd_probe_types[] = { "cmdlinepart", NULL };
++
++/* we can map a single or a list of partitions */
++enum {
++	B2M_SINGLE = 0,
++	B2M_PARSER,
++};
++
+ /* Static info about the MTD, used in cleanup_module */
+ static LIST_HEAD(blkmtd_device_list);
+ 
+-
+ static struct page *page_read(struct address_space *mapping, int index)
+ {
+ 	return read_mapping_page(mapping, index, NULL);
+@@ -211,14 +220,16 @@ static void block2mtd_free_device(struct
+ 
+ 
+ /* FIXME: ensure that mtd->size % erase_size == 0 */
+-static struct block2mtd_dev *add_device(char *devname, int erase_size, const char *mtdname)
++static struct block2mtd_dev *add_device(char *devname, int erase_size, const char *mtdname, int timeout, int offset, int length, int mtdparts)
+ {
+ 	const fmode_t mode = FMODE_READ | FMODE_WRITE | FMODE_EXCL;
+-	struct block_device *bdev;
++	struct block_device *bdev = ERR_PTR(-ENODEV);
+ 	struct block2mtd_dev *dev;
+ 	struct mtd_partition *part;
+ 	char *name;
+-
++#ifndef MODULE
++	int i;
++#endif
+ 	if (!devname)
+ 		return NULL;
+ 
+@@ -228,15 +239,20 @@ static struct block2mtd_dev *add_device(
+ 
+ 	/* Get a handle on the device */
+ 	bdev = blkdev_get_by_path(devname, mode, dev);
++
+ #ifndef MODULE
+-	if (IS_ERR(bdev)) {
++	for (i = 0; IS_ERR(bdev) && i <= timeout; i++) {
++		dev_t devt;
+ 
+-		/* We might not have rootfs mounted at this point. Try
+-		   to resolve the device name by other means. */
++		if (i)
++			msleep(1000);
++		wait_for_device_probe();
++
++		devt = name_to_dev_t(devname);
++		if (!devt)
++			continue;
+ 
+-		dev_t devt = name_to_dev_t(devname);
+-		if (devt)
+-			bdev = blkdev_get_by_dev(devt, mode, dev);
++		bdev = blkdev_get_by_dev(devt, mode, dev);
+ 	}
+ #endif
+ 
+@@ -251,6 +267,16 @@ static struct block2mtd_dev *add_device(
+ 		goto devinit_err;
+ 	}
+ 
++	if (length && (long)length % erase_size) {
++		pr_err("length must be a divisor of device size\n");
++		goto devinit_err;
++	}
++
++	if (offset && (long)offset % erase_size) {
++		pr_err("offset must be a divisor of device size\n");
++		goto devinit_err;
++	}
++
+ 	mutex_init(&dev->write_mutex);
+ 
+ 	/* Setup the MTD structure */
+@@ -277,6 +303,7 @@ static struct block2mtd_dev *add_device(
+ 	dev->mtd.priv = dev;
+ 	dev->mtd.owner = THIS_MODULE;
+ 
++#if 0
+ 	part = kzalloc(sizeof(struct mtd_partition), GFP_KERNEL);
+ 	part->name = name;
+ 	part->offset = 0;
+@@ -285,6 +312,31 @@ static struct block2mtd_dev *add_device(
+ 		/* Device didn't get added, so free the entry */
+ 		goto devinit_err;
+ 	}
++#else
++	if (mtdparts == B2M_PARSER) {
++		struct mtd_part_parser_data ppdata = { 0 };
++		if (mtd_device_parse_register(&dev->mtd, block2mtd_probe_types, &ppdata, NULL, 0)) {
++			/* Device didn't get added, so free the entry */
++			goto devinit_err;
++		}
++	} else {
++		part = kzalloc(sizeof(struct mtd_partition), GFP_KERNEL);
++		part->name = name;
++		if (offset) {
++			part->offset = 0;
++			if (length && offset + length <= dev->mtd.size)
++				part->size = length;
++			else
++				part->size = dev->mtd.size - part->offset;
++		} else {
++			part->size = dev->mtd.size;
++		}
++		if (mtd_device_register(&dev->mtd, part, 1)) {
++			/* Device didn't get added, so free the entry */
++			goto devinit_err;
++		}
++ 	}
++#endif
+ 	list_add(&dev->list, &blkmtd_device_list);
+ 	INFO("mtd%d: [%s] erase_size = %dKiB [%d]", dev->mtd.index,
+ 			mtdname, dev->mtd.erasesize >> 10, dev->mtd.erasesize);
+@@ -354,17 +406,20 @@ static inline void kill_final_newline(ch
+ 
+ #ifndef MODULE
+ static int block2mtd_init_called = 0;
+-static char block2mtd_paramline[80 + 12]; /* 80 for device, 12 for erase size */
++static char block2mtd_paramline[80 + 12 + 80 + 8]; /* 80 for device, 12 for erase size */
++static char block2mtdparts_paramline[80 + 12 + 80 + 8]; /* 80 for device, 12 for erase size */
++
+ #endif
+ 
+ 
+-static int block2mtd_setup2(const char *val)
++static int block2mtd_setup2(const char *val, int mtdparts)
+ {
+-	char buf[80 + 12 + 80]; /* 80 for device, 12 for erase size, 80 for name */
++	char buf[80 + 12 + 80 + 8 + 12 + 12]; /* 80 for device, 12 for erase size, 80 for name, 8 for timeout, 12 for offset, 12 for size  */
+ 	char *str = buf;
+-	char *token[3];
++	char *token[6];
+ 	char *name;
+ 	size_t erase_size = PAGE_SIZE;
++	unsigned long timeout = 0, offset = 0, length = 0;
+ 	int i, ret;
+ 
+ 	if (strnlen(val, sizeof(buf)) >= sizeof(buf))
+@@ -373,7 +428,7 @@ static int block2mtd_setup2(const char *
+ 	strcpy(str, val);
+ 	kill_final_newline(str);
+ 
+-	for (i = 0; i < 3; i++)
++	for (i = 0; i < 6; i++)
+ 		token[i] = strsep(&str, ",");
+ 
+ 	if (str)
+@@ -395,7 +450,16 @@ static int block2mtd_setup2(const char *
+ 	if (token[2] && (strlen(token[2]) + 1 > 80))
+ 		parse_err("mtd device name too long");
+ 
+-	add_device(name, erase_size, token[2]);
++	if (token[3] && kstrtoul(token[3], 0, &timeout))
++		parse_err("invalid timeout");
++
++	if (token[4] && kstrtoul(token[4], 0, &offset))
++		pr_err("invalid offset\n");
++
++	if (token[5] && kstrtoul(token[5], 0, &length))
++		pr_err("invalid length\n");
++
++	add_device(name, erase_size, token[2], timeout, offset, length, mtdparts);
+ 
+ 	return 0;
+ }
+@@ -404,7 +468,7 @@ static int block2mtd_setup2(const char *
+ static int block2mtd_setup(const char *val, struct kernel_param *kp)
+ {
+ #ifdef MODULE
+-	return block2mtd_setup2(val);
++	return block2mtd_setup2(val, B2M_SINGLE);
+ #else
+ 	/* If more parameters are later passed in via
+ 	   /sys/module/block2mtd/parameters/block2mtd
+@@ -412,7 +476,7 @@ static int block2mtd_setup(const char *v
+ 	   we can parse the argument now. */
+ 
+ 	if (block2mtd_init_called)
+-		return block2mtd_setup2(val);
++		return block2mtd_setup2(val, B2M_SINGLE);
+ 
+ 	/* During early boot stage, we only save the parameters
+ 	   here. We must parse them later: if the param passed
+@@ -428,8 +492,38 @@ static int block2mtd_setup(const char *v
+ }
+ 
+ 
++static int block2mtdparts_setup(const char *val, struct kernel_param *kp)
++{
++#ifdef MODULE
++	return block2mtd_setup2(val, B2M_PARSER);
++#else
++	/* If more parameters are later passed in via
++	   /sys/module/block2mtd/parameters/block2mtd
++	   and block2mtd_init() has already been called,
++	   we can parse the argument now. */
++
++	if (block2mtd_init_called)
++		return block2mtd_setup2(val, B2M_PARSER);
++
++	/* During early boot stage, we only save the parameters
++	   here. We must parse them later: if the param passed
++	   from kernel boot command line, block2mtd_setup() is
++	   called so early that it is not possible to resolve
++	   the device (even kmalloc() fails). Deter that work to
++	   block2mtd_setup2(). */
++
++	strlcpy(block2mtdparts_paramline, val, sizeof(block2mtdparts_paramline));
++
++	return 0;
++#endif
++}
++
++
+ module_param_call(block2mtd, block2mtd_setup, NULL, NULL, 0200);
+-MODULE_PARM_DESC(block2mtd, "Device to use. \"block2mtd=<dev>[,<erasesize>[,<name>]]\"");
++MODULE_PARM_DESC(block2mtd, "Device to use. \"block2mtd=<dev>[,<erasesize>[,<name>[,<timeout>]]]\"");
++
++module_param_call(block2mtdparts, block2mtdparts_setup, NULL, NULL, 0200);
++MODULE_PARM_DESC(block2mtdparts, "Device to use. \"block2mtdparts=<dev>[,<erasesize>[,<name>[,<timeout>]]]\"");
+ 
+ static int __init block2mtd_init(void)
+ {
+@@ -437,7 +531,9 @@ static int __init block2mtd_init(void)
+ 
+ #ifndef MODULE
+ 	if (strlen(block2mtd_paramline))
+-		ret = block2mtd_setup2(block2mtd_paramline);
++		ret = block2mtd_setup2(block2mtd_paramline, B2M_SINGLE);
++	if (strlen(block2mtdparts_paramline))
++		ret = block2mtd_setup2(block2mtdparts_paramline, B2M_PARSER);
+ 	block2mtd_init_called = 1;
+ #endif
+ 
+@@ -462,7 +558,7 @@ static void block2mtd_exit(void)
+ }
+ 
+ 
+-module_init(block2mtd_init);
++late_initcall(block2mtd_init);
+ module_exit(block2mtd_exit);
+ 
+ MODULE_LICENSE("GPL");

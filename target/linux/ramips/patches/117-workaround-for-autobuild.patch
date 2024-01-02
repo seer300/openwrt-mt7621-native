@@ -1,0 +1,13 @@
+Index: linux-3.10.14/scripts/kconfig/conf.c
+===================================================================
+--- linux-3.10.14.orig/scripts/kconfig/conf.c
++++ linux-3.10.14/scripts/kconfig/conf.c
+@@ -77,7 +77,7 @@ static void check_stdin(void)
+ 		printf(_("aborted!\n\n"));
+ 		printf(_("Console input/output is redirected. "));
+ 		printf(_("Run 'make oldconfig' to update configuration.\n\n"));
+-		exit(1);
++		//exit(1); // a quick fix for autobuild.
+ 	}
+ }
+ 

@@ -1,0 +1,13 @@
+Index: linux-3.10.14/drivers/net/raeth/ra_mac.c
+===================================================================
+--- linux-3.10.14.orig/drivers/net/raeth/ra_mac.c
++++ linux-3.10.14/drivers/net/raeth/ra_mac.c
+@@ -708,7 +708,7 @@ int QDMARead(struct seq_file *seq, void
+ 	seq_printf(seq, "SCH1 rate control:%d. Rate is %dKbps.\n", max_en, max_rate);
+ 	max_en = (temp&0x08000000)>>27;
+ 	max_rate = (temp&0x07F00000)>>20;
+-	for(i=0;i<(temp&0x000F0000);i++)
++	for(i=0;i<((temp&0x000F0000) >> 16);i++)
+ 		max_rate *= 10;
+ 	seq_printf(seq, "SCH2 rate control:%d. Rate is %dKbps.\n\n", max_en, max_rate);
+ 

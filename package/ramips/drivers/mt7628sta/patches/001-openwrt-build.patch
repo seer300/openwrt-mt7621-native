@@ -1,0 +1,20 @@
+Index: mt7628sta-4.0.1.4/mt_wifi_sta/Makefile
+===================================================================
+--- mt7628sta-4.0.1.4.orig/mt_wifi_sta/Makefile
++++ mt7628sta-4.0.1.4/mt_wifi_sta/Makefile
+@@ -1,10 +1,10 @@
+-EXTRA_CFLAGS = -Idrivers/net/wireless/mt_wifi/include \
+-				-Idrivers/net/wireless/mt_wifi/embedded/include \
+-				-Idrivers/net/wireless/mt_wifi/ate/include
++EXTRA_CFLAGS = -I$(src)/../mt_wifi/include \
++				-I$(src)/../mt_wifi/embedded/include \
++				-I$(src)/../mt_wifi/ate/include
+ 
+-DRV_NAME = mt_wifi
++DRV_NAME = mt7628sta
+ SRC_DIR = ../mt_wifi/embedded
+-obj-$(CONFIG_MT_STA_SUPPORT) += $(DRV_NAME).o
++obj-m += $(DRV_NAME).o
+ 
+ ########################################################
+ # Common files

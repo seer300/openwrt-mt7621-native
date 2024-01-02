@@ -1,0 +1,30 @@
+Index: linux-3.10.14/net/nat/hw_nat/ra_nat.c
+===================================================================
+--- linux-3.10.14.orig/net/nat/hw_nat/ra_nat.c
++++ linux-3.10.14/net/nat/hw_nat/ra_nat.c
+@@ -3772,12 +3772,14 @@ static void PpeSetDstPort(uint32_t Ebl)
+ 	struct net_device *dev;
+ #if defined (CONFIG_SUPPORT_OPENWRT)
+ 	dev=ra_dev_get_by_name("eth0");
+-	printk("eth2 ifindex =%x\n", dev->ifindex);
++	printk("eth0 ifindex =%x\n", dev->ifindex);
+ 	DstPort[dev->ifindex] = dev;
++	DP_GMAC1 = dev->ifindex;
+ #ifdef CONFIG_RAETH_GMAC2
+ 	dev=ra_dev_get_by_name("eth1");
+-	printk("eth2 ifindex =%x\n", dev->ifindex);
++	printk("eth1 ifindex =%x\n", dev->ifindex);
+ 	DstPort[dev->ifindex] = dev;
++	DPORT_GMAC2 = dev->ifindex;
+ #endif
+ #else
+ 	dev=ra_dev_get_by_name("eth2");
+@@ -4159,7 +4161,7 @@ static void SetAclFwd(uint32_t Ebl)
+ #endif
+ #endif
+ 		LanInt = ra_dev_get_by_name("br0");
+-/* discard above!!  */
++/* discard all above!  */
+ #if defined (CONFIG_SUPPORT_OPENWRT)
+ #if defined (CONFIG_RALINK_MT7621) || defined (CONFIG_ARCH_MT7623)
+ 		WanInt = ra_dev_get_by_name("eth1");

@@ -1,0 +1,25 @@
+Index: linux-3.10.14/arch/mips/ralink/nvram.c
+===================================================================
+--- linux-3.10.14.orig/arch/mips/ralink/nvram.c
++++ linux-3.10.14/arch/mips/ralink/nvram.c
+@@ -797,6 +797,11 @@ char const *nvram_get(int index, char *n
+ 
+ 	RANV_CHECK_INDEX(NULL);
+ 
++	if (!nvram_sem) {
++		printk("%s(%d,%s), sem not inited yet!\n", __FUNCTION__, index, name);
++		return NULL;
++	}
++
+ 	if (down_interruptible(nvram_sem)) {
+ 		printk("%s(%d): get nvram_sem fail\n", __func__, __LINE__);
+ 		return NULL;
+@@ -895,7 +900,7 @@ int nvram_getall(int index, char *buf)
+ module_init(ra_nvram_init);
+ MODULE_LICENSE("GPL");
+ #else
+-late_initcall(ra_nvram_init);
++subsys_initcall(ra_nvram_init);
+ #endif
+ module_exit(ra_nvram_exit);
+ EXPORT_SYMBOL(nvram_get);

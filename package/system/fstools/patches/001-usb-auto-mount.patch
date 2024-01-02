@@ -1,0 +1,227 @@
+Index: fstools-2015-02-25.1/block.c
+===================================================================
+--- fstools-2015-02-25.1.orig/block.c
++++ fstools-2015-02-25.1/block.c
+@@ -21,6 +21,7 @@
+ #include <glob.h>
+ #include <dirent.h>
+ #include <stdarg.h>
++#include <errno.h>
+ #include <string.h>
+ 
+ #include <sys/stat.h>
+@@ -279,7 +280,7 @@ static int mount_add(struct uci_section
+ 	struct blob_attr *tb[__MOUNT_MAX] = { 0 };
+ 	struct mount *m;
+ 
+-        blob_buf_init(&b, 0);
++		blob_buf_init(&b, 0);
+ 	uci_to_blob(&b, s, &mount_attr_list);
+ 	blobmsg_parse(mount_policy, __MOUNT_MAX, tb, blob_data(b.head), blob_len(b.head));
+ 
+@@ -319,7 +320,7 @@ static int swap_add(struct uci_section *
+ 	struct blob_attr *tb[__SWAP_MAX] = { 0 };
+ 	struct mount *m;
+ 
+-        blob_buf_init(&b, 0);
++		blob_buf_init(&b, 0);
+ 	uci_to_blob(&b, s, &swap_attr_list);
+ 	blobmsg_parse(swap_policy, __SWAP_MAX, tb, blob_data(b.head), blob_len(b.head));
+ 
+@@ -357,7 +358,7 @@ static int global_add(struct uci_section
+ {
+ 	struct blob_attr *tb[__CFG_MAX] = { 0 };
+ 
+-        blob_buf_init(&b, 0);
++		blob_buf_init(&b, 0);
+ 	uci_to_blob(&b, s, &config_attr_list);
+ 	blobmsg_parse(config_policy, __CFG_MAX, tb, blob_data(b.head), blob_len(b.head));
+ 
+@@ -414,6 +415,13 @@ static struct mount* find_block(const ch
+ 			return m;
+ 		if (m->device && device && !strcmp(m->device, device))
+ 			return m;
++		/* try wildcard match */
++		if (m->device && device && strchr(m->device, '*'))
++		{
++			char * p = strchr(m->device, '*');
++			if (0 == strncmp(device, m->device, p - m->device))
++				return m;
++		}
+ 	}
+ 
+ 	return NULL;
+@@ -745,6 +753,7 @@ static int mount_device(struct blkid_str
+ 		char *target = m->target;
+ 		char _target[32];
+ 		int err = 0;
++		uint32_t mflags = m->flags;
+ 
+ 		if (!target) {
+ 			snprintf(_target, sizeof(_target), "/mnt/%s", device);
+@@ -755,19 +764,34 @@ static int mount_device(struct blkid_str
+ 		if (check_fs)
+ 			check_filesystem(pr);
+ 
+-		err = mount(pr->dev, target, pr->id->name, m->flags,
+-		            (m->options) ? (m->options) : (""));
+-		if (err)
+-			ERROR("mounting %s (%s) as %s failed (%d) - %s\n",
+-			      pr->dev, pr->id->name, target, err, strerror(err));
+-		else
+-			handle_swapfiles(true);
++		while (1) {
++			err = mount(pr->dev, target, pr->id->name, mflags,
++						(m->options) ? (m->options) : (""));
++			if (err) {
++				if (!(mflags & MS_RDONLY))
++				{
++					ERROR("Fall back on RO mount. %s.\n", strerror(errno));
++					mflags |= MS_RDONLY;
++					continue;
++				}
++				else {
++					ERROR("mounting %s (%s) as %s failed (%d) - %s\n",
++						  pr->dev, pr->id->name, target, err, strerror(errno));
++					break;
++				}
++			}
++			else {
++				handle_swapfiles(true);
++				break;
++			}
++		}
+ 		return err;
+ 	}
+ 
+ 	if (anon_mount) {
+ 		char target[] = "/mnt/mmcblk123";
+ 		int err = 0;
++		uint32_t mflags = 0;
+ 
+ 		snprintf(target, sizeof(target), "/mnt/%s", device);
+ 		mkdir_p(target);
+@@ -775,12 +799,25 @@ static int mount_device(struct blkid_str
+ 		if (check_fs)
+ 			check_filesystem(pr);
+ 
+-		err = mount(pr->dev, target, pr->id->name, 0, "");
+-		if (err)
+-			ERROR("mounting %s (%s) as %s failed (%d) - %s\n",
+-					pr->dev, pr->id->name, target, err, strerror(err));
+-		else
+-			handle_swapfiles(true);
++		while (1) {
++			err = mount(pr->dev, target, pr->id->name, mflags, "");
++			if (err) {
++				if (!(mflags & MS_RDONLY)) {
++					ERROR("Fall back on RO mount. %s.\n", strerror(errno));
++					mflags |= MS_RDONLY;
++					continue;
++				}
++				else {
++					ERROR("mounting %s (%s) as %s failed (%d) - %s\n",
++							pr->dev, pr->id->name, target, err, strerror(errno));
++					break;
++				}
++			}
++			else {
++				handle_swapfiles(true);
++				break;
++			}
++		}
+ 		return err;
+ 	}
+ 
+@@ -811,7 +848,7 @@ static int umount_device(struct blkid_st
+ 	err = umount2(mp, MNT_DETACH);
+ 	if (err)
+ 		ERROR("unmounting %s (%s)  failed (%d) - %s\n",
+-			pr->dev, mp, err, strerror(err));
++			pr->dev, mp, err, strerror(errno));
+ 	else
+ 		ERROR("unmounted %s (%s)\n",
+ 			pr->dev, mp);
+@@ -839,7 +876,7 @@ static int main_hotplug(int argc, char *
+ 
+ 		if (err)
+ 			ERROR("umount of %s failed (%d) - %s\n",
+-					mount_point, err, strerror(err));
++					mount_point, err, strerror(errno));
+ 
+ 		return 0;
+ 	} else if (strcmp(action, "add")) {
+@@ -1034,7 +1071,7 @@ static int check_extroot(char *path)
+ 				fp = fopen(tag, "w+");
+ 				if (!fp) {
+ 					ERROR("extroot: failed to write UUID to %s: %d (%s)\n",
+-					      tag, errno, strerror(errno));
++						  tag, errno, strerror(errno));
+ 					/* return 0 to continue boot regardless of error */
+ 					return 0;
+ 				}
+@@ -1046,7 +1083,7 @@ static int check_extroot(char *path)
+ 			fp = fopen(tag, "r");
+ 			if (!fp) {
+ 				ERROR("extroot: failed to read UUID from %s: %d (%s)\n",
+-				      tag, errno, strerror(errno));
++					  tag, errno, strerror(errno));
+ 				return -1;
+ 			}
+ 
+@@ -1057,7 +1094,7 @@ static int check_extroot(char *path)
+ 				return 0;
+ 
+ 			ERROR("extroot: UUID mismatch (root: %s, %s: %s)\n",
+-			      pr->uuid, basename(path), uuid);
++				  pr->uuid, basename(path), uuid);
+ 			return -1;
+ 		}
+ 	}
+@@ -1105,7 +1142,7 @@ static int mount_extroot(char *cfg)
+ 	}
+ 	if (pr) {
+ 		if (strncmp(pr->id->name, "ext", 3) &&
+-		    strncmp(pr->id->name, "ubifs", 5)) {
++			strncmp(pr->id->name, "ubifs", 5)) {
+ 			ERROR("extroot: unsupported filesystem %s, try ext4\n", pr->id->name);
+ 			return -1;
+ 		}
+@@ -1126,7 +1163,7 @@ static int mount_extroot(char *cfg)
+ 
+ 		if (err) {
+ 			ERROR("extroot: mounting %s (%s) on %s failed: %d (%s)\n",
+-			      pr->dev, pr->id->name, path, err, strerror(err));
++				  pr->dev, pr->id->name, path, err, strerror(errno));
+ 		} else if (m->overlay) {
+ 			err = check_extroot(path);
+ 			if (err)
+@@ -1134,8 +1171,8 @@ static int mount_extroot(char *cfg)
+ 		}
+ 	} else {
+ 		ERROR("extroot: cannot find device %s%s\n",
+-		      (m->uuid ? "with UUID " : (m->label ? "with label " : "")),
+-		      (m->uuid ? m->uuid : (m->label ? m->label : m->device)));
++			  (m->uuid ? "with UUID " : (m->label ? "with label " : "")),
++			  (m->uuid ? m->uuid : (m->label ? m->label : m->device)));
+ 	}
+ 
+ 	return err;
+@@ -1210,7 +1247,7 @@ static int main_extroot(int argc, char *
+ 			rmdir("/tmp/overlay");
+ 		rmdir(cfg);
+ 		return err;
+-       }
++	   }
+ #endif
+ 
+ 	return mount_extroot(NULL);
+@@ -1255,7 +1292,7 @@ static int main_detect(int argc, char **
+ 	cache_load(0);
+ 	printf("config 'global'\n");
+ 	printf("\toption\tanon_swap\t'0'\n");
+-	printf("\toption\tanon_mount\t'0'\n");
++	printf("\toption\tanon_mount\t'1'\n");
+ 	printf("\toption\tauto_swap\t'1'\n");
+ 	printf("\toption\tauto_mount\t'1'\n");
+ 	printf("\toption\tdelay_root\t'5'\n");

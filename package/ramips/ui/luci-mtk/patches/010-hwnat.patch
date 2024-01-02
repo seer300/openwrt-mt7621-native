@@ -1,0 +1,150 @@
+Index: luci/modules/admin-full/luasrc/controller/admin/network.lua
+===================================================================
+--- luci.orig/modules/admin-full/luasrc/controller/admin/network.lua
++++ luci/modules/admin-full/luasrc/controller/admin/network.lua
+@@ -138,6 +138,18 @@ function index()
+ 			page.order  = 40
+ 		end
+ 
++		if nixio.fs.access("/lib/modules/ralink/hw_nat.ko") then
++			page = node("admin", "network", "hwnat")
++			page.target = template("admin_network/hwnat")
++			page.title  = _("NAT Acceleration")
++			page.order  = 31
++
++			page = entry({"admin", "network", "hwnat_disable"}, call("hwnat_disable"), nil)
++			page.leaf = true
++			page = entry({"admin", "network", "hwnat_enable"}, call("hwnat_enable"), nil)
++			page.leaf = true
++		end
++
+ 		page  = node("admin", "network", "routes")
+ 		page.target = cbi("admin_network/routes")
+ 		page.title  = _("Static Routes")
+@@ -465,3 +477,33 @@ end
+ function diag_traceroute6(addr)
+ 	diag_command("traceroute6 -q 1 -w 2 -n %q 2>&1", addr)
+ end
++
++function hwnat_disable()
++	luci.http.prepare_content("application/json")
++
++	-- special treatment for new-wifi-nat.
++	-- if nixio.fs.access("/sys/module/mt7615e/refcnt") then
++	-- 	luci.sys.call("iwpriv ra0 set hw_nat_register=0")
++	-- 	luci.sys.call("iwpriv rai0 set hw_nat_register=0")
++	-- end
++
++	-- luci.sys.call("rmmod hw_nat")
++	-- nixio.exec("/bin/sh", "-c", "rmmod hw_nat")
++	luci.sys.call("sh /usr/sbin/hwnat-disable.sh")
++	luci.http.write_json(0)
++end
++
++function hwnat_enable()
++	luci.http.prepare_content("application/json")
++
++	luci.sys.call("sh /usr/sbin/hwnat-enable.sh")
++	-- luci.sys.call("insmod /lib/modules/ralink/hw_nat.ko")
++	-- nixio.exec("/bin/sh", "-c", "insmod /lib/modules/ralink/hw_nat.ko")
++
++	-- special treatment for new-wifi-nat.
++	-- if nixio.fs.access("/sys/module/mt7615e/refcnt") then
++	-- 	luci.sys.call("iwpriv ra0 set hw_nat_register=1")
++	-- 	luci.sys.call("iwpriv rai0 set hw_nat_register=1")
++	-- end
++	luci.http.write_json(0)
++end
+Index: luci/modules/admin-full/luasrc/view/admin_network/hwnat.htm
+===================================================================
+--- /dev/null
++++ luci/modules/admin-full/luasrc/view/admin_network/hwnat.htm
+@@ -0,0 +1,88 @@
++<%#
++LuCI - Lua Configuration Interface
++Copyright 2010 Jo-Philipp Wich <xm@subsignal.org>
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++	http://www.apache.org/licenses/LICENSE-2.0
++
++$Id$
++
++-%>
++
++<%+header%>
++
++<%
++local fs   = require "nixio.fs"
++local enabled = fs.access("/sys/module/hw_nat/refcnt")
++%>
++
++<script type="text/javascript" src="<%=resource%>/cbi.js"></script>
++<script type="text/javascript">//<![CDATA[
++	var stxhr = new XHR();
++
++	function enable_hwnat(enable)
++	{
++
++		if (enable)
++			action = "enable";
++		else
++			action = "disable";
++
++		var legend = document.getElementById('diag-rc-legend');
++		var output = document.getElementById('diag-rc-output');
++
++		output.innerHTML =
++			'<img src="<%=resource%>/icons/loading.gif" alt="<%:Loading%>" style="vertical-align:middle" /> ' +
++			'<%:Waiting for command to complete...%>'
++		;
++
++		legend.parentNode.style.display = 'block';
++		legend.style.display = 'inline';
++
++		stxhr.get('<%=luci.dispatcher.build_url("admin", "network")%>/hwnat_' + action, null,
++			function(x)
++			{
++				if (x.responseText == "0")
++				{
++					window.location.href="<%=luci.dispatcher.build_url("admin", "network", "hwnat")%>";
++				}
++				else
++				{
++					legend.style.display = 'none';
++					output.innerHTML = '<span class="error"><%:failed!%></span>';
++				}
++			}
++		);
++	}
++//]]></script>
++
++<form method="post" action="<%=pcdata(luci.http.getenv("REQUEST_URI"))%>">
++	<div class="cbi-map">
++		<h2><a id="content" name="content"><%:NAT Acceleration%></a></h2>
++
++		<fieldset class="cbi-section">
++			<legend><%:Hardware NAT%></legend>
++
++			<p>Hardware NAT saves a lot of CPU resource.</p>
++			<br />
++			<% if enabled then %>
++			<input type="button" value="<%:Disable Hardware NAT%>" class="cbi-button-reset cbi-button" onclick="enable_hwnat(false)" />
++			<% else %>
++			<input type="button" value="<%:Enable Hardware NAT%>" class="cbi-button-reload cbi-button" onclick="enable_hwnat(true)" />
++			<% end %>
++
++			<br style="clear:both" /><br />
++
++		</fieldset>
++	</div>
++
++	<fieldset class="cbi-section" style="display:none">
++		<legend id="diag-rc-legend"><%:Apply configuration ...%></legend>
++		<span id="diag-rc-output"></span>
++	</fieldset>
++</form>
++
++<%+footer%>

@@ -1,0 +1,30 @@
+Index: mt7628sta-4.0.1.4/mt_wifi/embedded/mcu/andes_mt.c
+===================================================================
+--- mt7628sta-4.0.1.4.orig/mt_wifi/embedded/mcu/andes_mt.c
++++ mt7628sta-4.0.1.4/mt_wifi/embedded/mcu/andes_mt.c
+@@ -4346,7 +4346,11 @@ error:
+ 	ret = AndesSendCmdMsg(pAd, msg);
+ 
+ error:
+-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s:(ret = %d)\n", __FUNCTION__, ret));
++	if (ret)
++		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_ERROR, ("%s:(ret = %d)\n", __FUNCTION__, ret));
++	else
++		MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_LOUD, ("%s:(ret = %d)\n", __FUNCTION__, ret));
++
+ 	return ret;
+  }
+ 
+Index: mt7628sta-4.0.1.4/mt_wifi/hw_ctrl/cmm_asic_mt.c
+===================================================================
+--- mt7628sta-4.0.1.4.orig/mt_wifi/hw_ctrl/cmm_asic_mt.c
++++ mt7628sta-4.0.1.4/mt_wifi/hw_ctrl/cmm_asic_mt.c
+@@ -1225,7 +1225,7 @@ UINT32 MtAsicGetRetryLimit(RTMP_ADAPTER
+ VOID MtAsicSetSlotTime(RTMP_ADAPTER *pAd, UINT32 SlotTime, UINT32 SifsTime)
+ {
+ 	CmdSlotTimeSet(pAd,(UINT8)SlotTime,(UINT8)SifsTime,(UINT8)RIFS_TIME, EIFS_TIME);
+-	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_TRACE, ("%s(%d): SetSlotTime!\n",__FUNCTION__, __LINE__));
++	MTWF_LOG(DBG_CAT_ALL, DBG_SUBCAT_ALL, DBG_LVL_LOUD, ("%s(%d): SetSlotTime!\n",__FUNCTION__, __LINE__));
+ }
+ 
+ #define MAX_RX_PKT_LENGTH   0x400 /* WORD(4 Bytes) unit */

@@ -1,0 +1,31 @@
+Index: luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+===================================================================
+--- luci.orig/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
++++ luci/modules/admin-full/luasrc/model/cbi/admin_network/wifi.lua
+@@ -246,17 +246,18 @@ if vendor == "ralink" and netmode ~= "st
+         ch:value("14","2484MHz (Channel 14)",{region="4"},{region="5"},{region="31"},{region="33"})
+ 	end
+ 	bw = s:taboption("general", ListValue, "bw", translate("Band Width"))
++
+ 	bw:value("0", translate("20MHz"))
+-        bw:value("1", translate("40MHz"))
++	bw:value("1", translate("40MHz"), {channel="0"}, {channel="36"}, {channel="40"}, {channel="44"}, {channel="48"}, {channel="52"}, {channel="56"}, {channel="60"}, {channel="64"}, {channel="100"}, {channel="104"}, {channel="108"}, {channel="112"}, {channel="116"}, {channel="120"}, {channel="124"}, {channel="128"}, {channel="132"}, {channel="136"}, {channel="140"}, {channel="149"}, {channel="153"}, {channel="157"}, {channel="161"}, {channel="1"}, {channel="2"}, {channel="3"}, {channel="4"}, {channel="5"}, {channel="6"}, {channel="7"}, {channel="8"}, {channel="9"}, {channel="10"}, {channel="11"}, {channel="12"}, {channel="13"}, {channel="14"})
+ 	if band == "5G" then
+-        bw:value("2", translate("80MHz"))
+-        bw:value("3", translate("160MHz"))
+-	bw:value("4", translate("80+80MHz"))	
+-	vht2ndchannel = s:taboption("general", Value, "vht2ndchannel", translate("2nd channel"))
+-        vht2ndchannel:depends({bw="4"})
+-	bw.default = 2
++       		bw:value("2", translate("80MHz"), {channel="0"}, {channel="36"}, {channel="40"}, {channel="44"}, {channel="48"}, {channel="52"}, {channel="56"}, {channel="60"}, {channel="64"}, {channel="100"}, {channel="104"}, {channel="108"}, {channel="112"}, {channel="116"}, {channel="120"}, {channel="124"}, {channel="128"}, {channel="132"}, {channel="136"}, {channel="140"}, {channel="149"}, {channel="153"}, {channel="157"}, {channel="161"}, {channel="1"}, {channel="2"}, {channel="3"}, {channel="4"}, {channel="5"}, {channel="6"}, {channel="7"}, {channel="8"}, {channel="9"}, {channel="10"}, {channel="11"}, {channel="12"}, {channel="13"}, {channel="14"})
++	        bw:value("3", translate("160MHz"), {channel="0"}, {channel="36"}, {channel="40"}, {channel="44"}, {channel="48"}, {channel="52"}, {channel="56"}, {channel="60"}, {channel="64"}, {channel="100"}, {channel="104"}, {channel="108"}, {channel="112"}, {channel="116"}, {channel="120"}, {channel="124"}, {channel="128"}, {channel="132"}, {channel="136"}, {channel="140"}, {channel="149"}, {channel="153"}, {channel="157"}, {channel="161"}, {channel="1"}, {channel="2"}, {channel="3"}, {channel="4"}, {channel="5"}, {channel="6"}, {channel="7"}, {channel="8"}, {channel="9"}, {channel="10"}, {channel="11"}, {channel="12"}, {channel="13"}, {channel="14"})
++		bw:value("4", translate("80+80MHz"), {channel="0"}, {channel="36"}, {channel="40"}, {channel="44"}, {channel="48"}, {channel="52"}, {channel="56"}, {channel="60"}, {channel="64"}, {channel="100"}, {channel="104"}, {channel="108"}, {channel="112"}, {channel="116"}, {channel="120"}, {channel="124"}, {channel="128"}, {channel="132"}, {channel="136"}, {channel="140"}, {channel="149"}, {channel="153"}, {channel="157"}, {channel="161"}, {channel="1"}, {channel="2"}, {channel="3"}, {channel="4"}, {channel="5"}, {channel="6"}, {channel="7"}, {channel="8"}, {channel="9"}, {channel="10"}, {channel="11"}, {channel="12"}, {channel="13"}, {channel="14"})	
++		vht2ndchannel = s:taboption("general", Value, "vht2ndchannel", translate("2nd channel"))
++	        vht2ndchannel:depends({bw="4"})
++		bw.default = 2
+ 	else
+-	bw.default = 1
++		bw.default = 1
+ 	end
+ 
+ 	country = s:taboption("advanced", ListValue, "country", translate("Country Code"))

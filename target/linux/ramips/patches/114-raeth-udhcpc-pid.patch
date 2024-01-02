@@ -1,0 +1,17 @@
+Index: linux-3.10.14/drivers/net/raeth/raether.c
+===================================================================
+--- linux-3.10.14.orig/drivers/net/raeth/raether.c
++++ linux-3.10.14/drivers/net/raeth/raether.c
+@@ -1354,7 +1354,11 @@ void kill_sig_workq(struct work_struct *
+ 	struct task_struct *p = NULL;
+ 
+ 	//read udhcpc pid from file, and send signal USR2,USR1 to get a new IP
+-	fp = filp_open("/var/run/udhcpc.pid", O_RDONLY, 0);
++#if defined(CONFIG_RALINK_MT7621) || defined(CONFIG_ARCH_MT7623)
++	fp = filp_open("/var/run/udhcpc-eth1.pid", O_RDONLY, 0);
++#else
++	fp = filp_open("/var/run/udhcpc-eth0.2.pid", O_RDONLY, 0);
++#endif
+ 	if (IS_ERR(fp))
+ 	    return;
+ 

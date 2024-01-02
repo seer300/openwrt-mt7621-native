@@ -1,0 +1,13 @@
+Index: linux-3.10.20/drivers/net/ethernet/Kconfig
+===================================================================
+--- linux-3.10.20.orig/drivers/net/ethernet/Kconfig
++++ linux-3.10.20/drivers/net/ethernet/Kconfig
+@@ -26,7 +26,7 @@ source "drivers/net/ethernet/apple/Kconf
+ source "drivers/net/ethernet/atheros/Kconfig"
+ source "drivers/net/ethernet/cadence/Kconfig"
+ source "drivers/net/ethernet/adi/Kconfig"
+-source "drivers/net/ethernet/broadcom/Kconfig"
++#source "drivers/net/ethernet/broadcom/Kconfig"
+ source "drivers/net/ethernet/brocade/Kconfig"
+ source "drivers/net/ethernet/calxeda/Kconfig"
+ source "drivers/net/ethernet/chelsio/Kconfig"

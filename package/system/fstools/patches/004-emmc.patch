@@ -1,0 +1,597 @@
+Index: fstools-2015-02-25.1/mount_root.c
+===================================================================
+--- fstools-2015-02-25.1.orig/mount_root.c
++++ fstools-2015-02-25.1/mount_root.c
+@@ -62,6 +62,7 @@ start(int argc, char *argv[1])
+ 
+ 	case FS_JFFS2:
+ 	case FS_UBIFS:
++	case FS_EXT4:
+ 		mount_overlay(data);
+ 		break;
+ 
+@@ -89,6 +90,7 @@ static int
+ done(int argc, char *argv[1])
+ {
+ 	struct volume *v = volume_find("rootfs_data");
++	FILE * fp = NULL;
+ 
+ 	if (!v)
+ 		return -1;
+@@ -96,6 +98,19 @@ done(int argc, char *argv[1])
+ 	switch (volume_identify(v)) {
+ 	case FS_NONE:
+ 	case FS_DEADCODE:
++		/* if the mtd is created by block2mtd */
++		fp = fopen("/proc/cmdline", "rb");
++		if (fp) {
++			char buf[2048] = {0};
++			fread(buf, 1, sizeof(buf), fp);
++			fclose(fp);
++			buf[sizeof(buf)-1] = 0;
++			if (strstr(buf, "block2mtd")) {
++				fprintf(stderr, "%s is created by block2mtd, ext4_switch.\n", v->name);
++				return ext4_switch(v);
++			}
++		}
++		fprintf(stderr, "%s, normally, jffs2_switch.\n", v->name);
+ 		return jffs2_switch(v);
+ 	}
+ 
+@@ -104,8 +119,11 @@ done(int argc, char *argv[1])
+ 
+ int main(int argc, char **argv)
+ {
+-	if (argc < 2)
++	if (argc < 2) {
++        fprintf(stderr, "%s.\n", argv[0]);
+ 		return start(argc, argv);
++	}
++    fprintf(stderr, "%s %s.\n", argv[0], argv[1]);
+ 	if (!strcmp(argv[1], "stop"))
+ 		return stop(argc, argv);
+ 	if (!strcmp(argv[1], "done"))
+Index: fstools-2015-02-25.1/libfstools/emmc.c
+===================================================================
+--- /dev/null
++++ fstools-2015-02-25.1/libfstools/emmc.c
+@@ -0,0 +1,272 @@
++/*
++ * Copyright (C) 2015 Hua Shao <nossiac@163.com>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License version 2.1
++ * as published by the Free Software Foundation
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++#include <sys/mount.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <fcntl.h>
++#include <asm/byteorder.h>
++#include <unistd.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <mtd/mtd-user.h>
++
++#include "libfstools.h"
++
++#include "volume.h"
++
++#define PATH_MAX		256
++
++struct emmc_priv {
++	int	fd;
++	int	idx;
++	char *chr;
++};
++
++static struct driver emmc_driver;
++
++
++static int emmc_partition_load(struct volume *v)
++{
++	struct emmc_priv *p = (struct emmc_priv*) v->priv;
++	struct mtd_info_user mtd_info;
++
++    fprintf(stderr, "%s(%s)\n", __FUNCTION__, v->name);
++	if (p->fd)
++		return 0;
++
++	p->fd = open(p->chr, O_RDWR | O_SYNC);
++	if (p->fd < 0) {
++		p->fd = 0;
++		fprintf(stderr, "Could not open block2mtd device: %s\n", p->chr);
++		return -1;
++	}
++
++    v->type = EMMC;
++
++	if (ioctl(p->fd, MEMGETINFO, &mtd_info)) {
++		close(p->fd);
++		fprintf(stderr, "Could not get MTD device info from %s(block2mtd)\n", p->chr);
++        v->size = 0; // TODO
++        v->block_size = -1; // TODO
++	}
++
++	v->size = mtd_info.size;
++	v->block_size = mtd_info.erasesize;
++
++	return 0;
++}
++
++
++static int block2mtd_find_index(char *name)
++{
++	FILE *fp = fopen("/proc/mtd", "r");
++	static char line[256];
++	char *index = NULL;
++
++	if(!fp)
++		return -1;
++
++	while (!index && fgets(line, sizeof(line), fp)) {
++		char *ret;
++
++		if ((ret = strstr(line, name)) && (ret[strlen(name)] == '"')) {
++			char *eol = strstr(line, ":");
++
++			if (!eol)
++				continue;
++
++			*eol = '\0';
++			index = &line[3];
++		}
++	}
++
++	fclose(fp);
++    if (index)
++    	return atoi(index);
++    else
++        return -1;
++}
++
++
++static int emmc_partition_find(struct volume *v, char *name)
++{
++	struct emmc_priv *p;
++	static char buffer[32];
++	FILE * fp = NULL;
++
++    fprintf(stderr, "%s(%p, %s)\n", __FUNCTION__, v, name);
++
++    fp = fopen("/proc/cmdline", "rb");
++    if (fp) {
++        char buf[2048] = {0};
++        fread(buf, 1, sizeof(buf), fp);
++        fclose(fp);
++        buf[sizeof(buf)-1] = 0;
++        if (!strstr(buf, "block2mtd")) {
++            fprintf(stderr, "%s is not created by block2mtd, skip.\n", v->name);
++            return -1;
++        }
++    }
++
++	p = calloc(1, sizeof(struct emmc_priv));
++	if (!p)
++		return -1;
++
++	p->idx = block2mtd_find_index(name);
++
++	v->priv = p;
++	v->name = strdup(name);
++	v->drv = &emmc_driver;
++
++	snprintf(buffer, sizeof(buffer), "/dev/mtdblock%d", p->idx);
++	v->blk = strdup(buffer);
++
++	snprintf(buffer, sizeof(buffer), "/dev/mtd%d", p->idx);
++	p->chr = strdup(buffer);
++
++	if (emmc_partition_load(v)) {
++		fprintf(stderr, "%s emmc_partition_load %s failed\n", __FUNCTION__, v->name);
++		return -1;
++	}
++
++    fprintf(stderr, "v->name = %s\n", v->name);
++    fprintf(stderr, "v->blk = %s\n", v->blk);
++    fprintf(stderr, "v->drv->name = %s\n", v->drv->name);
++    fprintf(stderr, "v->priv->fd = %d\n", p->fd);
++    fprintf(stderr, "v->priv->idx = %d\n", p->idx);
++    fprintf(stderr, "v->priv->chr = %s\n", p->chr);
++
++	return 0;
++}
++
++static int emmc_partition_identify(struct volume *v)
++{
++	struct emmc_priv *p = (struct emmc_priv*) v->priv;
++	__u32 deadc0de;
++	__u16 ext4;
++	size_t sz;
++
++    fprintf(stderr, "%s(%s)\n", __FUNCTION__, v->name);
++	if (emmc_partition_load(v)) {
++		fprintf(stderr, "%s, emmc_partition_load %s failed\n", __FUNCTION__, v->name);
++		return -1;
++	}
++
++	sz = read(p->fd, &deadc0de, sizeof(deadc0de));
++	if (sz != sizeof(deadc0de)) {
++		fprintf(stderr, "%s, reading %s failed: %s\n", __FUNCTION__, v->name, strerror(errno));
++		return -1;
++	}
++
++	deadc0de = __be32_to_cpu(deadc0de);
++	if (deadc0de == 0xdeadc0de) {
++		fprintf(stderr, "ext4 is not ready - marker found\n");
++		return FS_DEADCODE;
++	}
++
++    /* 0x400 -> super block offset in partition
++       0x38  -> magic offset in superblock
++     */
++    lseek(p->fd, 0x438, SEEK_SET);
++	sz = read(p->fd, &ext4, sizeof(ext4));
++	if (sz != sizeof(ext4)) {
++		fprintf(stderr, "reading %s failed: %s\n", v->name, strerror(errno));
++		return -1;
++	}
++
++	if (ext4 == 0xEF53) {
++		fprintf(stderr, "ext4 is ready\n");
++		return FS_EXT4;
++	}
++
++	fprintf(stderr, "No ext4 magic was found, expected %x, got %x\n", 0xEF53, ext4);
++
++	return FS_NONE;
++}
++
++static int emmc_partition_erase(struct volume *v, int offset, int len)
++{
++    fprintf(stderr, "%s(%s, %d, %d)\n", __FUNCTION__, v->name, offset, len);
++	return 0;
++}
++
++static int emmc_partition_erase_all(struct volume *v)
++{
++    fprintf(stderr, "%s, remove files instead of erase partitions.\n", __FUNCTION__);
++    system("rm -rf /overlay/*");
++	return 0;
++}
++
++static int emmc_partition_init(struct volume *v)
++{
++    fprintf(stderr, "%s(%s)\n", __FUNCTION__, v->name);
++	return 0;
++}
++
++static int emmc_partition_read(struct volume *v, void *buf, int offset, int length)
++{
++	struct emmc_priv *p = (struct emmc_priv*) v->priv;
++
++    fprintf(stderr, "%s(%s, %p, %d, %d)\n", __FUNCTION__, v->name, buf, offset, length);
++	if (emmc_partition_load(v))
++		return -1;
++
++	if (lseek(p->fd, offset, SEEK_SET) == (off_t) -1) {
++		fprintf(stderr, "lseek/read failed\n");
++		return -1;
++	}
++
++	if (read(p->fd, buf, length) == -1) {
++		fprintf(stderr, "read failed\n");
++		return -1;
++	}
++
++	return 0;
++}
++
++static int emmc_partition_write(struct volume *v, void *buf, int offset, int length)
++{
++
++    fprintf(stderr, "%s(%s, %p, %d, %d)\n", __FUNCTION__, v->name, buf, offset, length);
++
++#if 0
++	struct emmc_priv *p = (struct emmc_priv*) v->priv;
++	if (emmc_partition_load(v))
++		return -1;
++
++	if (lseek(p->fd, offset, SEEK_SET) == (off_t) -1) {
++		fprintf(stderr, "lseek/write failed at offset %d\n", offset);
++		perror("lseek");
++		return -1;
++	}
++
++	if (write(p->fd, buf, length) == -1) {
++		fprintf(stderr, "write failed\n");
++		return -1;
++	}
++#endif
++	return 0;
++}
++
++static struct driver emmc_driver = {
++	.name = "emmc",
++	.find = emmc_partition_find,
++	.init = emmc_partition_init,
++	.erase = emmc_partition_erase,
++	.erase_all = emmc_partition_erase_all,
++	.read = emmc_partition_read,
++	.write = emmc_partition_write,
++	.identify = emmc_partition_identify,
++};
++DRIVER(emmc_driver);
+Index: fstools-2015-02-25.1/libfstools/libfstools.h
+===================================================================
+--- fstools-2015-02-25.1.orig/libfstools/libfstools.h
++++ fstools-2015-02-25.1/libfstools/libfstools.h
+@@ -25,6 +25,7 @@ enum {
+ 	FS_JFFS2,
+ 	FS_DEADCODE,
+ 	FS_UBIFS,
++	FS_EXT4,
+ };
+ 
+ extern char const *extroot_prefix;
+@@ -43,6 +44,7 @@ extern char* find_mount_point(char *bloc
+ extern int find_filesystem(char *fs);
+ 
+ extern int jffs2_switch(struct volume *v);
++extern int ext4_switch(struct volume *v);
+ 
+ extern int handle_whiteout(const char *dir);
+ extern void foreachdir(const char *dir, int (*cb)(const char*));
+Index: fstools-2015-02-25.1/libfstools/volume.h
+===================================================================
+--- fstools-2015-02-25.1.orig/libfstools/volume.h
++++ fstools-2015-02-25.1/libfstools/volume.h
+@@ -47,6 +47,7 @@ enum {
+ 	NANDFLASH,
+ 	NORFLASH,
+ 	UBIVOLUME,
++	EMMC,
+ };
+ 
+ struct volume {
+Index: fstools-2015-02-25.1/libfstools/overlay.c
+===================================================================
+--- fstools-2015-02-25.1.orig/libfstools/overlay.c
++++ fstools-2015-02-25.1/libfstools/overlay.c
+@@ -31,6 +31,7 @@
+ #include "volume.h"
+ 
+ #define SWITCH_JFFS2 "/tmp/.switch_jffs2"
++#define SWITCH_EXT4 "/tmp/.switch_ext4"
+ 
+ void
+ foreachdir(const char *dir, int (*cb)(const char*))
+@@ -106,6 +107,59 @@ switch2jffs(struct volume *v)
+ 	return fopivot("/overlay", "/rom");
+ }
+ 
++
++static int
++switch2ext4(struct volume *v)
++{
++	struct stat s;
++	int ret;
++
++	if (!stat(SWITCH_EXT4, &s)) {
++		fprintf(stderr, "ext4 switch already running\n");
++		return -1;
++	}
++
++	creat(SWITCH_EXT4, 0600);
++	ret = mount(v->blk, "/rom/overlay", "ext4", MS_NOATIME, NULL);
++	unlink(SWITCH_EXT4);
++	if (ret) {
++		fprintf(stderr, "failed - mount -t ext4 %s /rom/overlay: %s\n", v->blk, strerror(errno));
++
++        char buf[128] = {0};
++        fprintf(stderr, "maybe ext4 is not created yet.\n");
++        snprintf(buf, sizeof(buf), "mkfs.ext4 %s", v->blk);
++        system(buf);
++        fprintf(stderr, "%s.\n", buf);
++
++        creat(SWITCH_EXT4, 0600);
++        ret = mount(v->blk, "/rom/overlay", "ext4", MS_NOATIME, NULL);
++        unlink(SWITCH_EXT4);
++        if (ret) {
++            fprintf(stderr, "failed again, give up - mount -t ext4 %s /rom/overlay: %s\n", v->blk, strerror(errno));
++		    return -1;
++        }
++	}
++
++	if (mount("none", "/", NULL, MS_NOATIME | MS_REMOUNT, 0)) {
++		fprintf(stderr, "failed - mount -o remount,ro none: %s\n", strerror(errno));
++		return -1;
++	}
++
++	system("cp -a /tmp/root/* /rom/overlay");
++
++	if (pivot("/rom", "/mnt")) {
++		fprintf(stderr, "failed - pivot /rom /mnt: %s\n", strerror(errno));
++		return -1;
++	}
++
++	if (mount_move("/mnt", "/tmp/root", "")) {
++		fprintf(stderr, "failed - mount -o move /mnt /tmp/root %s\n", strerror(errno));
++		return -1;
++	}
++
++	return fopivot("/overlay", "/rom");
++}
++
+ int
+ handle_whiteout(const char *dir)
+ {
+@@ -199,6 +253,53 @@ jffs2_switch(struct volume *v)
+ 	return ret;
+ }
+ 
++int
++ext4_switch(struct volume *v)
++{
++	char *mp;
++	int ret = -1;
++
++	if (find_overlay_mount("overlayfs:/tmp/root"))
++		return -1;
++
++	if (find_filesystem("overlay")) {
++		fprintf(stderr, "overlayfs not found\n");
++		return ret;
++	}
++
++	mp = find_mount_point(v->blk, 0);
++	if (mp) {
++		fprintf(stderr, "rootfs_data:%s is already mounted as %s\n", v->blk, mp);
++		return -1;
++	}
++
++	switch (volume_identify(v)) {
++	case FS_NONE:
++		fprintf(stderr, "no ext4 marker found\n");
++		/* fall through */
++
++	case FS_DEADCODE:
++		ret = switch2ext4(v);
++		if (!ret) {
++			fprintf(stderr, "doing fo cleanup\n");
++			umount2("/tmp/root", MNT_DETACH);
++			foreachdir("/overlay/", handle_whiteout);
++		}
++		break;
++
++	case FS_EXT4:
++		ret = overlay_mount(v, "ext4");
++		if (ret)
++			break;
++		if (mount_move("/tmp", "", "/overlay") || fopivot("/overlay", "/rom")) {
++			fprintf(stderr, "switching to ext4 failed\n");
++			ret = -1;
++		}
++		break;
++	}
++	return ret;
++}
++
+ static int overlay_mount_fs(struct volume *v)
+ {
+ 	char *fstype;
+@@ -214,12 +315,29 @@ static int overlay_mount_fs(struct volum
+ 	case FS_UBIFS:
+ 		fstype = "ubifs";
+ 		break;
++    case FS_EXT4:
++        fstype = "ext4";
++        break;
+ 	}
+ 
+ 	if (mount(v->blk, "/tmp/overlay", fstype, MS_NOATIME, NULL)) {
+ 		fprintf(stderr, "failed to mount -t %s %s /tmp/overlay: %s\n",
+ 				fstype, v->blk, strerror(errno));
+-		return -1;
++
++        if (0 == strcmp(fstype, "ext4")) {
++            /* maybe ext4 is not created yet! */
++            char buf[128] = {0};
++            fprintf(stderr, "maybe ext4 is not created yet.\n");
++            snprintf(buf, sizeof(buf), "mkfs.ext4 %s", v->blk);
++            system(buf);
++            fprintf(stderr, "%s.\n", buf);
++
++            if (mount(v->blk, "/tmp/overlay", fstype, MS_NOATIME, NULL)) {
++                fprintf(stderr, "again! failed to mount -t %s %s /tmp/overlay: %s\n",
++                        fstype, v->blk, strerror(errno));
++                return -1;
++            }
++        }
+ 	}
+ 
+ 	volume_init(v);
+@@ -250,7 +368,7 @@ int mount_overlay(struct volume *v)
+ 
+ 	fprintf(stderr, "switching to overlay\n");
+ 	if (mount_move("/tmp", "", "/overlay") || fopivot("/overlay", "/rom")) {
+-		fprintf(stderr, "switching to jffs2 failed - fallback to ramoverlay\n");
++		fprintf(stderr, "switching to overlay failed - fallback to ramoverlay\n");
+ 		return ramoverlay();
+ 	}
+ 
+Index: fstools-2015-02-25.1/CMakeLists.txt
+===================================================================
+--- fstools-2015-02-25.1.orig/CMakeLists.txt
++++ fstools-2015-02-25.1/CMakeLists.txt
+@@ -10,6 +10,7 @@ ADD_LIBRARY(fstools SHARED
+ 		libfstools/extroot.c
+ 		libfstools/overlay.c
+ 		libfstools/volume.c
++		libfstools/emmc.c
+ 		libfstools/mtd.c
+ 		libfstools/mount.c
+ 		libfstools/ubi.c
+Index: fstools-2015-02-25.1/libfstools/mtd.c
+===================================================================
+--- fstools-2015-02-25.1.orig/libfstools/mtd.c
++++ fstools-2015-02-25.1/libfstools/mtd.c
+@@ -153,10 +153,25 @@ static int mtd_volume_find(struct volume
+ 	char *idx = mtd_find_index(name);
+ 	struct mtd_priv *p;
+ 	char buffer[32];
++	size_t sz;
++    FILE * fp = NULL;
+ 
+ 	if (!idx)
+ 		return -1;
+ 
++    /* if the mtd is created by block2mtd */
++    fp = fopen("/proc/cmdline", "rb");
++    if (fp) {
++        char buf[2048] = {0};
++        sz = fread(buf, 1, sizeof(buf), fp);
++		fclose(fp);
++        buf[sizeof(buf)-1] = 0;
++        if (strstr(buf, "block2mtd")) {
++            fprintf(stderr, "%s, %s is created by block2mtd.\n", __FUNCTION__, name);
++            return -1;
++        }
++    }
++
+ 	p = calloc(1, sizeof(struct mtd_priv));
+ 	if (!p)
+ 		return -1;
+@@ -186,12 +201,26 @@ static int mtd_volume_identify(struct vo
+ 	__u32 deadc0de;
+ 	__u16 jffs2;
+ 	size_t sz;
++    FILE * fp = NULL;
+ 
+ 	if (mtd_volume_load(v)) {
+ 		fprintf(stderr, "reading %s failed\n", v->name);
+ 		return -1;
+ 	}
+ 
++    /* if the mtd is created by block2mtd */
++    fp = fopen("/proc/cmdline", "rb");
++    if (fp) {
++        char buf[2048] = {0};
++        sz = fread(buf, 1, sizeof(buf), fp);
++		fclose(fp);
++        buf[sizeof(buf)-1] = 0;
++        if (strstr(buf, "block2mtd")) {
++            fprintf(stderr, "%s, %s is created by block2mtd, default use FS_EXT4.\n", __FUNCTION__, v->name);
++            return FS_EXT4;
++        }
++    }
++
+ 	sz = read(p->fd, &deadc0de, sizeof(deadc0de));
+ 
+ 	if (sz != sizeof(deadc0de)) {

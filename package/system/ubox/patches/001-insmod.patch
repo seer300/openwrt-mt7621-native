@@ -1,0 +1,47 @@
+Index: ubox-2015-02-25.1/kmodloader.c
+===================================================================
+--- ubox-2015-02-25.1.orig/kmodloader.c
++++ ubox-2015-02-25.1/kmodloader.c
+@@ -483,14 +483,15 @@ static int insert_module(char *path, con
+ 		return ret;
+ 	}
+ 
+-	data = malloc(s.st_size);
+-	if (read(fd, data, s.st_size) == s.st_size)
+-		ret = syscall(__NR_init_module, data, (unsigned long) s.st_size, options);
+-	else
++	data = mmap(NULL, s.st_size, PROT_READ,
++                       MAP_PRIVATE, fd, 0);
++	if (data == MAP_FAILED)
+ 		ERROR("failed to read full module %s\n", path);
++	else
++		ret = syscall(__NR_init_module, data, (unsigned long) s.st_size, options);
+ 
++	munmap(data, s.st_size);
+ 	close(fd);
+-	free(data);
+ 
+ 	return ret;
+ }
+@@ -574,15 +575,18 @@ static int main_insmod(int argc, char **
+ 	if (argc < 2)
+ 		return print_insmod_usage();
+ 
++	if (init_module_folders())
++		return -1;
++
++	if (scan_loaded_modules())
++		return -1;
++
+ 	name = get_module_name(argv[1]);
+ 	if (!name) {
+ 		ERROR("cannot find module - %s\n", argv[1]);
+ 		return -1;
+ 	}
+ 
+-	if (scan_loaded_modules())
+-		return -1;
+-
+ 	if (find_module(name)) {
+ 		ERROR("module is already loaded - %s\n", name);
+ 		return -1;

@@ -1,0 +1,20 @@
+Index: linux-3.10.14/drivers/mtd/nand/mtk_nand.c
+===================================================================
+--- linux-3.10.14.orig/drivers/mtd/nand/mtk_nand.c
++++ linux-3.10.14/drivers/mtd/nand/mtk_nand.c
+@@ -3720,6 +3720,7 @@ static int mtk_nand_write_oob_raw(struct
+     return 0;
+ }
+ 
++#ifndef NAND_JFFS2_WORKAROUND
+ static int mtk_nand_write_oob_hw(struct mtd_info *mtd, struct nand_chip *chip, int page)
+ {
+     int i, iter;
+@@ -3828,6 +3829,7 @@ static int mtk_nand_write_oob(struct mtd
+ 
+     return 0;
+ }
++#endif
+ 
+ int mtk_nand_block_markbad_hw(struct mtd_info *mtd, loff_t offset)
+ {
