@@ -1,0 +1,11 @@
+--- linux-3.10.14.orig/arch/mips/ralink/cmdline.c	2024-01-12 16:37:45.136282601 +0800
++++ linux-3.10.14/arch/mips/ralink/cmdline.c	2024-01-12 16:37:09.947793435 +0800
+@@ -43,7 +43,7 @@
+ 
+ #if defined (CONFIG_RT2880_ROOTFS_IN_FLASH)
+ #ifdef CONFIG_SYSFS
+-char rt2880_cmdline[]="console=ttyS1,57600n8 root=/dev/mtdblock5";
++char rt2880_cmdline[]="console=ttyS1,115200n8 root=/dev/mtdblock5";
+ #else
+ char rt2880_cmdline[]="console=ttyS1,57600n8 root=1f05";
+ #endif
